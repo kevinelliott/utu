@@ -1,0 +1,10 @@
+/target
+/dist
+/.trunk
+/.DS_Store
+*.log
+
+# Local design-research and session state. Canonical product/design contracts stay tracked.
+/.impeccable/hook.cache.json
+/.impeccable/questions/
+/.impeccable/references/

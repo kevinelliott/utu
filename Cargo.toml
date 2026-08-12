@@ -1,0 +1,39 @@
+[workspace]
+members = [
+  ".",
+  "crates/dashboard-connectors",
+  "crates/dashboard-core",
+  "src-tauri",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.88"
+
+[workspace.dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.143"
+thiserror = "2.0.16"
+
+[package]
+name = "utu-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+utu-core = { path = "crates/dashboard-core" }
+leptos = { version = "0.8.20", features = ["csr"] }
+wasm-bindgen = "0.2.103"
+web-sys = { version = "0.3.80", features = ["Location", "Window"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+panic = "abort"
+strip = "symbols"

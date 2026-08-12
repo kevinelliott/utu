@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Utu",
+  "version": "0.1.0",
+  "identifier": "app.utu.local",
+  "build": {
+    "beforeDevCommand": "trunk serve --port 1421",
+    "devUrl": "http://127.0.0.1:1421",
+    "beforeBuildCommand": "trunk build --release",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Utu",
+        "width": 1440,
+        "height": 940,
+        "minWidth": 880,
+        "minHeight": 620,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 18, "y": 18 },
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all"
+  }
+}

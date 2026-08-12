@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-12T10:02:00-07:00",
+  "title": "Design System: Utu",
+  "extensions": {
+    "colorMeta": {
+      "chrome-top": {
+        "role": "neutral",
+        "displayName": "Mist Chrome",
+        "tonalRamp": ["oklch(15% 0.007 160.1)", "oklch(26% 0.007 160.1)", "oklch(38% 0.007 160.1)", "oklch(50% 0.007 160.1)", "oklch(62% 0.007 160.1)", "oklch(74% 0.007 160.1)", "oklch(86% 0.007 160.1)", "oklch(95% 0.007 160.1)"]
+      },
+      "chrome-bottom": {
+        "role": "neutral",
+        "displayName": "Blue-Gray Chrome",
+        "tonalRamp": ["oklch(15% 0.010 222.1)", "oklch(26% 0.010 222.1)", "oklch(38% 0.010 222.1)", "oklch(50% 0.010 222.1)", "oklch(62% 0.010 222.1)", "oklch(74% 0.010 222.1)", "oklch(86% 0.010 222.1)", "oklch(95% 0.010 222.1)"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Work Surface",
+        "tonalRamp": ["oklch(15% 0.002 145.6)", "oklch(26% 0.002 145.6)", "oklch(38% 0.002 145.6)", "oklch(50% 0.002 145.6)", "oklch(62% 0.002 145.6)", "oklch(74% 0.002 145.6)", "oklch(86% 0.002 145.6)", "oklch(95% 0.002 145.6)"]
+      },
+      "surface-soft": {
+        "role": "neutral",
+        "displayName": "Soft Field",
+        "tonalRamp": ["oklch(15% 0.003 174.5)", "oklch(26% 0.003 174.5)", "oklch(38% 0.003 174.5)", "oklch(50% 0.003 174.5)", "oklch(62% 0.003 174.5)", "oklch(74% 0.003 174.5)", "oklch(86% 0.003 174.5)", "oklch(95% 0.003 174.5)"]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Raised White",
+        "tonalRamp": ["oklch(15% 0.000 89.9)", "oklch(26% 0.000 89.9)", "oklch(38% 0.000 89.9)", "oklch(50% 0.000 89.9)", "oklch(62% 0.000 89.9)", "oklch(74% 0.000 89.9)", "oklch(86% 0.000 89.9)", "oklch(95% 0.000 89.9)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Deep Spruce Ink",
+        "tonalRamp": ["oklch(15% 0.015 174.7)", "oklch(26% 0.015 174.7)", "oklch(38% 0.015 174.7)", "oklch(50% 0.015 174.7)", "oklch(62% 0.015 174.7)", "oklch(74% 0.015 174.7)", "oklch(86% 0.015 174.7)", "oklch(95% 0.015 174.7)"]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Spruce Ink",
+        "tonalRamp": ["oklch(15% 0.020 165.7)", "oklch(26% 0.020 165.7)", "oklch(38% 0.020 165.7)", "oklch(50% 0.020 165.7)", "oklch(62% 0.020 165.7)", "oklch(74% 0.020 165.7)", "oklch(86% 0.020 165.7)", "oklch(95% 0.020 165.7)"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Operational Gray",
+        "tonalRamp": ["oklch(15% 0.016 168.8)", "oklch(26% 0.016 168.8)", "oklch(38% 0.016 168.8)", "oklch(50% 0.016 168.8)", "oklch(62% 0.016 168.8)", "oklch(74% 0.016 168.8)", "oklch(86% 0.016 168.8)", "oklch(95% 0.016 168.8)"]
+      },
+      "quiet": {
+        "role": "neutral",
+        "displayName": "Quiet Gray",
+        "tonalRamp": ["oklch(15% 0.017 168.7)", "oklch(26% 0.017 168.7)", "oklch(38% 0.017 168.7)", "oklch(50% 0.017 168.7)", "oklch(62% 0.017 168.7)", "oklch(74% 0.017 168.7)", "oklch(86% 0.017 168.7)", "oklch(95% 0.017 168.7)"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Fine Divider",
+        "tonalRamp": ["oklch(15% 0.009 168.7)", "oklch(26% 0.009 168.7)", "oklch(38% 0.009 168.7)", "oklch(50% 0.009 168.7)", "oklch(62% 0.009 168.7)", "oklch(74% 0.009 168.7)", "oklch(86% 0.009 168.7)", "oklch(95% 0.009 168.7)"]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Strong Divider",
+        "tonalRamp": ["oklch(15% 0.012 170.2)", "oklch(26% 0.012 170.2)", "oklch(38% 0.012 170.2)", "oklch(50% 0.012 170.2)", "oklch(62% 0.012 170.2)", "oklch(74% 0.012 170.2)", "oklch(86% 0.012 170.2)", "oklch(95% 0.012 170.2)"]
+      },
+      "green": {
+        "role": "primary",
+        "displayName": "Owner Green",
+        "tonalRamp": ["oklch(15% 0.098 164.8)", "oklch(26% 0.098 164.8)", "oklch(38% 0.098 164.8)", "oklch(50% 0.098 164.8)", "oklch(62% 0.098 164.8)", "oklch(74% 0.098 164.8)", "oklch(86% 0.098 164.8)", "oklch(95% 0.098 164.8)"]
+      },
+      "green-strong": {
+        "role": "primary",
+        "displayName": "Deep Owner Green",
+        "tonalRamp": ["oklch(15% 0.087 165.1)", "oklch(26% 0.087 165.1)", "oklch(38% 0.087 165.1)", "oklch(50% 0.087 165.1)", "oklch(62% 0.087 165.1)", "oklch(74% 0.087 165.1)", "oklch(86% 0.087 165.1)", "oklch(95% 0.087 165.1)"]
+      },
+      "green-soft": {
+        "role": "primary",
+        "displayName": "Pale Owner Green",
+        "tonalRamp": ["oklch(15% 0.013 167.2)", "oklch(26% 0.013 167.2)", "oklch(38% 0.013 167.2)", "oklch(50% 0.013 167.2)", "oklch(62% 0.013 167.2)", "oklch(74% 0.013 167.2)", "oklch(86% 0.013 167.2)", "oklch(95% 0.013 167.2)"]
+      },
+      "amber": {
+        "role": "secondary",
+        "displayName": "Evidence Amber",
+        "tonalRamp": ["oklch(15% 0.100 67.1)", "oklch(26% 0.100 67.1)", "oklch(38% 0.100 67.1)", "oklch(50% 0.100 67.1)", "oklch(62% 0.100 67.1)", "oklch(74% 0.100 67.1)", "oklch(86% 0.100 67.1)", "oklch(95% 0.100 67.1)"]
+      },
+      "amber-soft": {
+        "role": "secondary",
+        "displayName": "Pale Evidence Amber",
+        "tonalRamp": ["oklch(15% 0.027 83.5)", "oklch(26% 0.027 83.5)", "oklch(38% 0.027 83.5)", "oklch(50% 0.027 83.5)", "oklch(62% 0.027 83.5)", "oklch(74% 0.027 83.5)", "oklch(86% 0.027 83.5)", "oklch(95% 0.027 83.5)"]
+      },
+      "coral": {
+        "role": "tertiary",
+        "displayName": "Failure Coral",
+        "tonalRamp": ["oklch(15% 0.120 28.6)", "oklch(26% 0.120 28.6)", "oklch(38% 0.120 28.6)", "oklch(50% 0.120 28.6)", "oklch(62% 0.120 28.6)", "oklch(74% 0.120 28.6)", "oklch(86% 0.120 28.6)", "oklch(95% 0.120 28.6)"]
+      },
+      "coral-soft": {
+        "role": "tertiary",
+        "displayName": "Pale Failure Coral",
+        "tonalRamp": ["oklch(15% 0.019 29.5)", "oklch(26% 0.019 29.5)", "oklch(38% 0.019 29.5)", "oklch(50% 0.019 29.5)", "oklch(62% 0.019 29.5)", "oklch(74% 0.019 29.5)", "oklch(86% 0.019 29.5)", "oklch(95% 0.019 29.5)"]
+      },
+      "blue-soft": {
+        "role": "tertiary",
+        "displayName": "Inference Blue Mist",
+        "tonalRamp": ["oklch(15% 0.012 239.9)", "oklch(26% 0.012 239.9)", "oklch(38% 0.012 239.9)", "oklch(50% 0.012 239.9)", "oklch(62% 0.012 239.9)", "oklch(74% 0.012 239.9)", "oklch(86% 0.012 239.9)", "oklch(95% 0.012 239.9)"]
+      },
+      "selection": {
+        "role": "primary",
+        "displayName": "Selection Wash",
+        "tonalRamp": ["oklch(15% 0.014 169.2)", "oklch(26% 0.014 169.2)", "oklch(38% 0.014 169.2)", "oklch(50% 0.014 169.2)", "oklch(62% 0.014 169.2)", "oklch(74% 0.014 169.2)", "oklch(86% 0.014 169.2)", "oklch(95% 0.014 169.2)"]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Green",
+        "tonalRamp": ["oklch(15% 0.098 165.6)", "oklch(26% 0.098 165.6)", "oklch(38% 0.098 165.6)", "oklch(50% 0.098 165.6)", "oklch(62% 0.098 165.6)", "oklch(74% 0.098 165.6)", "oklch(86% 0.098 165.6)", "oklch(95% 0.098 165.6)"]
+      },
+      "mark-deep": {
+        "role": "primary",
+        "displayName": "Mark Deep",
+        "tonalRamp": ["oklch(15% 0.043 173.9)", "oklch(26% 0.043 173.9)", "oklch(38% 0.043 173.9)", "oklch(50% 0.043 173.9)", "oklch(62% 0.043 173.9)", "oklch(74% 0.043 173.9)", "oklch(86% 0.043 173.9)", "oklch(95% 0.043 173.9)"]
+      },
+      "mark-light": {
+        "role": "neutral",
+        "displayName": "Mark Light",
+        "tonalRamp": ["oklch(15% 0.009 161.4)", "oklch(26% 0.009 161.4)", "oklch(38% 0.009 161.4)", "oklch(50% 0.009 161.4)", "oklch(62% 0.009 161.4)", "oklch(74% 0.009 161.4)", "oklch(86% 0.009 161.4)", "oklch(95% 0.009 161.4)"]
+      }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "Workspace titles and highest local emphasis." },
+      "title": { "displayName": "Title", "purpose": "Event and task titles in operational streams." },
+      "body": { "displayName": "Body", "purpose": "Operational explanations and owner or agent messages." },
+      "label": { "displayName": "Label", "purpose": "Uppercase section labels and inspector taxonomy." },
+      "control": { "displayName": "Control", "purpose": "Compact buttons and local actions." },
+      "micro-avatar": { "displayName": "Micro Avatar", "purpose": "Initials inside the smallest agent identities." },
+      "micro": { "displayName": "Micro", "purpose": "Dense non-critical accessory metadata." },
+      "caption": { "displayName": "Caption", "purpose": "Compact evidence and fleet metadata." },
+      "product": { "displayName": "Product", "purpose": "Utu identity in native window chrome." },
+      "compact-title": { "displayName": "Compact Title", "purpose": "Small-screen stream title." },
+      "responsive-title": { "displayName": "Responsive Title", "purpose": "Narrow-window workspace heading." },
+      "mono": { "displayName": "Mono", "purpose": "Logs, commands, diffs, and trace-like evidence." }
+    },
+    "shadows": [
+      { "name": "composer", "value": "0 6px 20px rgb(24 46 37 / 5%)", "purpose": "Local separation for the active direction field." },
+      { "name": "overlay-inspector", "value": "0 20px 50px rgb(24 46 37 / 18%)", "purpose": "Inspector elevation after it leaves the desktop grid below 1180px." },
+      { "name": "toast", "value": "0 14px 34px rgb(14 29 23 / 24%)", "purpose": "Strongest transient feedback layer." },
+      { "name": "composer-focus", "value": "0 0 0 3px color-mix(in srgb, var(--green-soft) 70%, transparent)", "purpose": "Focus-within ring around the complete direction composer." }
+    ],
+    "motion": [
+      { "name": "structural-transition", "value": "180ms cubic-bezier(0.2, 0.8, 0.2, 1)", "purpose": "Shell columns, transient context rail, and toast entrance." },
+      { "name": "toast-in", "value": "translateY(8px) to translateY(0) with opacity over 180ms", "purpose": "Short feedback entrance without lingering motion." },
+      { "name": "working-spinner", "value": "1s linear infinite", "purpose": "Active work indicator when text also names the running state." },
+      { "name": "reduced-motion", "value": "0.01ms; one iteration", "purpose": "Disables meaningful animation and transition under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "overlay-inspector", "value": "1180px" },
+      { "name": "bottom-utility-rail", "value": "820px" },
+      { "name": "density-reduction", "value": "480px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Canonical App Mark",
+      "kind": "custom",
+      "description": "Provider-neutral home mark using the exact canonical SVG geometry.",
+      "html": "<button class=\"ds-app-mark\" type=\"button\" aria-label=\"Utu home\"><svg viewBox=\"0 0 64 64\" aria-hidden=\"true\" focusable=\"false\"><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#183a31\"></rect><path d=\"M18 19h28v8H18zm0 14h18v12H18zm24 0h4v12h-4z\" fill=\"#eff6f2\"></path></svg></button>",
+      "css": ".ds-app-mark { width: 32px; height: 32px; display: block; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; } .ds-app-mark svg { display: block; width: 100%; height: 100%; } .ds-app-mark:focus-visible { outline: 2px solid color-mix(in srgb, var(--focus) 70%, white); outline-offset: 2px; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Compact primary action for the owner's next intentional command.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m5 12 4 4L19 6\"></path></svg>Approve</button>",
+      "css": ".ds-btn-primary { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 0; border-radius: 7px; background: var(--green); color: white; font: 690 11px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI Variable\", \"Segoe UI\", sans-serif; cursor: pointer; } .ds-btn-primary svg { width: 15px; height: 15px; } .ds-btn-primary:hover { background: var(--green-strong); } .ds-btn-primary:active { background: var(--native-control-pressed); } .ds-btn-primary:focus-visible { outline: 2px solid color-mix(in srgb, var(--focus) 70%, white); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet bordered action for local controls and alternatives.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"><path d=\"M8 5v14m8-14v14\"></path></svg>Pause</button>",
+      "css": ".ds-btn-secondary { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--native-control); color: var(--ink-soft); font: 690 11px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI Variable\", \"Segoe UI\", sans-serif; cursor: pointer; } .ds-btn-secondary svg { width: 15px; height: 15px; } .ds-btn-secondary:hover { border-color: var(--line-strong); background: var(--native-control-hover); color: var(--ink); } .ds-btn-secondary:active { background: var(--native-control-pressed); } .ds-btn-secondary:focus-visible { outline: 2px solid color-mix(in srgb, var(--focus) 70%, white); outline-offset: 2px; }"
+    },
+    {
+      "name": "Utility Rail Navigation",
+      "kind": "nav",
+      "description": "Stable icon-and-shape app navigation with an explicit active state.",
+      "html": "<nav class=\"ds-utility-nav\" aria-label=\"Application\"><button class=\"ds-rail-button ds-is-active\" type=\"button\" aria-label=\"Workspace\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5zm6 10v-6h6v6\"></path></svg></button><button class=\"ds-rail-button\" type=\"button\" aria-label=\"Search\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"><path d=\"m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0\"></path></svg></button></nav>",
+      "css": ".ds-utility-nav { display: inline-flex; flex-direction: column; align-items: center; gap: 7px; padding: 8px; background: var(--rail-field); border-right: 1px solid var(--line-strong); } .ds-rail-button { width: 38px; height: 38px; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; } .ds-rail-button svg { width: 18px; height: 18px; } .ds-rail-button:hover { background: rgb(255 255 255 / 72%); color: var(--ink); } .ds-rail-button.ds-is-active { background: color-mix(in srgb, var(--selection) 82%, white); color: var(--green-strong); box-shadow: inset 0 0 0 1px rgb(31 122 90 / 10%); } .ds-rail-button:active { background: var(--native-control-pressed); } .ds-rail-button:focus-visible { outline: 2px solid color-mix(in srgb, var(--focus) 70%, white); outline-offset: 2px; }"
+    },
+    {
+      "name": "Workspace View Switch",
+      "kind": "nav",
+      "description": "Compact labeled switch for Attention, Projects, and Fleet within one shell.",
+      "html": "<div class=\"ds-view-switch\" role=\"tablist\" aria-label=\"Workspace view\"><button class=\"ds-is-active\" type=\"button\" role=\"tab\" aria-selected=\"true\">Attention</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">Projects</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">Fleet</button></div>",
+      "css": ".ds-view-switch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--segmented-field); } .ds-view-switch button { min-width: 72px; height: 28px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: 720 9.5px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI Variable\", \"Segoe UI\", sans-serif; letter-spacing: 0.03em; cursor: pointer; } .ds-view-switch button:hover { color: var(--ink); background: rgb(255 255 255 / 44%); } .ds-view-switch button.ds-is-active { color: var(--ink); background: var(--surface-raised); box-shadow: 0 1px 2px rgb(33 56 47 / 12%); } .ds-view-switch button:active { background: var(--native-control-pressed); } .ds-view-switch button:focus-visible { outline: 2px solid color-mix(in srgb, var(--focus) 70%, white); outline-offset: 1px; }"
+    },
+    {
+      "name": "Evidence Tags",
+      "kind": "chip",
+      "description": "Text-bearing evidence states that keep observed, inferred, and stale distinct.",
+      "html": "<div class=\"ds-evidence-set\" aria-label=\"Evidence examples\"><button class=\"ds-evidence ds-observed\" type=\"button\">Observed</button><button class=\"ds-evidence ds-inferred\" type=\"button\">Inferred</button><button class=\"ds-evidence ds-stale\" type=\"button\">Stale</button></div>",
+      "css": ".ds-evidence-set { display: flex; align-items: center; gap: 6px; } .ds-evidence { min-height: 19px; display: inline-flex; align-items: center; padding: 2px 6px; border: 0; border-radius: 6px; font: 700 8.5px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; cursor: pointer; } .ds-observed { color: var(--green-strong); background: var(--green-soft); } .ds-inferred { color: #315e7d; background: var(--blue-soft); } .ds-stale { color: #7a510f; background: var(--amber-soft); } .ds-evidence:hover { filter: saturate(1.08); } .ds-evidence:active { transform: translateY(1px); } .ds-evidence:focus-visible { outline: 2px solid color-mix(in srgb, var(--focus) 70%, white); outline-offset: 2px; }"
+    },
+    {
+      "name": "Selected Context Row",
+      "kind": "custom",
+      "refersTo": "context-row-selected",
+      "description": "Signature compact row combining identity, project context, freshness, and selection.",
+      "html": "<button class=\"ds-context-row\" type=\"button\"><span class=\"ds-avatar\" aria-hidden=\"true\">CL</span><span class=\"ds-row-copy\"><strong>Claude</strong><small>HomeTender · approval</small></span><span class=\"ds-row-time\">18s</span></button>",
+      "css": ".ds-context-row { width: 250px; display: flex; align-items: center; gap: 9px; padding: 7px 8px; border: 0; border-radius: 10px; background: var(--selection); color: var(--ink-soft); text-align: left; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 35%, transparent); cursor: pointer; } .ds-avatar { width: 26px; height: 26px; display: inline-grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #f0b4a8; color: #25312d; font: 760 8px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; box-shadow: inset 0 0 0 1px rgb(24 34 31 / 9%); } .ds-row-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; } .ds-row-copy strong { overflow: hidden; font: 700 11.5px/1.2 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; text-overflow: ellipsis; white-space: nowrap; } .ds-row-copy small { overflow: hidden; color: var(--muted); font: 400 9.5px/1.4 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; text-overflow: ellipsis; white-space: nowrap; } .ds-row-time { align-self: flex-start; padding-top: 2px; color: var(--quiet); font: 400 9px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-context-row:hover { background: color-mix(in srgb, var(--selection) 82%, white); } .ds-context-row:active { transform: translateY(1px); } .ds-context-row:focus-visible { outline: 2px solid color-mix(in srgb, var(--focus) 70%, white); outline-offset: 2px; }"
+    },
+    {
+      "name": "Direction Composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "Locally elevated command field with project and agent context attached.",
+      "html": "<div class=\"ds-composer\"><label class=\"ds-composer-label\" for=\"ds-direction\">Direct an agent</label><textarea id=\"ds-direction\" rows=\"1\" placeholder=\"Direct an agent or assign a task…\"></textarea><div class=\"ds-composer-toolbar\"><div class=\"ds-composer-context\"><button type=\"button\">HomeTender</button><button type=\"button\">Claude</button></div><button class=\"ds-send\" type=\"button\" aria-label=\"Send direction\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m4 4 17 8-17 8 3-8zm3 8h14\"></path></svg></button></div></div>",
+      "css": ".ds-composer { width: 420px; padding: 9px 10px 8px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--surface-raised); color: var(--ink); box-shadow: 0 6px 20px rgb(24 46 37 / 5%); } .ds-composer:focus-within { border-color: color-mix(in srgb, var(--green) 65%, white); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-soft) 70%, transparent); } .ds-composer-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); } .ds-composer textarea { width: 100%; min-height: 26px; max-height: 90px; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink); font: 400 11.5px/1.52 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-composer textarea::placeholder { color: var(--quiet); } .ds-composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 5px; } .ds-composer-context { display: flex; gap: 6px; } .ds-composer-context button { height: 26px; padding: 0 9px; border: 0; border-radius: 7px; background: var(--surface-soft); color: var(--ink-soft); font: 400 9.5px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; cursor: pointer; } .ds-composer-context button:hover { background: var(--selection); } .ds-send { width: 32px; height: 32px; display: inline-grid; place-items: center; border: 0; border-radius: 9px; background: var(--green); color: white; cursor: pointer; } .ds-send svg { width: 18px; height: 18px; } .ds-send:hover { background: var(--green-strong); } .ds-send:active { transform: translateY(1px); } .ds-send:focus-visible, .ds-composer-context button:focus-visible { outline: 2px solid color-mix(in srgb, var(--focus) 70%, white); outline-offset: 2px; }"
+    },
+    {
+      "name": "Operational Toast",
+      "kind": "custom",
+      "description": "Highest transient feedback layer for truthful command status.",
+      "html": "<div class=\"ds-toast\" role=\"status\"><span>Direction staged. A live connector will deliver it after explicit confirmation.</span><button type=\"button\">Dismiss</button></div>",
+      "css": ".ds-toast { max-width: 430px; display: flex; align-items: center; gap: 14px; padding: 11px 12px 11px 14px; border-radius: 11px; background: #1e2a26; color: white; box-shadow: 0 14px 34px rgb(14 29 23 / 24%); font: 400 10.5px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-toast button { padding: 5px 7px; border: 0; border-radius: 7px; background: rgb(255 255 255 / 10%); color: white; font: 400 9.5px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; cursor: pointer; } .ds-toast button:hover { background: rgb(255 255 255 / 18%); } .ds-toast button:active { transform: translateY(1px); } .ds-toast button:focus-visible { outline: 2px solid white; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Owner's Workbench",
+    "overview": "The Owner's Workbench is a focused native workspace: light, calm, compact, direct, and operationally truthful. It feels app-native without borrowing a provider's identity, and it lets the owner move quickly among attention, projects, agents, sessions, and evidence without turning the work into a management report.\n\nThe system is restrained, precise, and locally tactile. One edge-to-edge work surface holds the task at hand; a stable utility rail and contextual rail establish place, while inspectors and toasts appear only when the owner needs more depth. The titlebar, rails, toolbar, and content read as one continuous desktop window rather than a web page mounted inside a decorative frame. Hierarchy, evidence language, and small responsive state changes create character without a control-room skin or decorative noise.",
+    "keyCharacteristics": [
+      "Compact native-workspace density with a clear 9–19px type hierarchy.",
+      "Provider-neutral identity anchored by the canonical geometric app mark.",
+      "Pale mineral surfaces, deep spruce ink, and scarce semantic color.",
+      "Edge-to-edge structural panes with transient contextual depth.",
+      "Evidence-aware states that pair color with text or shape.",
+      "Restrained motion, visible keyboard focus, and reduced-motion parity."
+    ],
+    "rules": [
+      { "name": "The Scarce Green Rule", "body": "Use green only for primary action, selected context, and evidence-backed healthy or live state; its rarity preserves operational signal.", "section": "colors" },
+      { "name": "The Truth Is Redundant Rule", "body": "Every status pairs color with text or shape, and observed, inferred, stale, unsupported, and failed states remain distinct.", "section": "colors" },
+      { "name": "The Density Without Squinting Rule", "body": "Use small type to support fast scanning, never to erase hierarchy or contrast; operational body copy remains readable and secondary copy still meets WCAG AA.", "section": "typography" },
+      { "name": "The One Window Rule", "body": "Compose Utu edge to edge as one installed window. Rails, work surface, and standing inspector meet on structural dividers; do not float a rounded website shell over a page-like background.", "section": "layout" },
+      { "name": "The Flat-at-Rest Rule", "body": "Standing panes have no elevation. Reserve shadows for the active composer, overlay inspector, and toast.", "section": "elevation" },
+      { "name": "The Local Radius Rule", "body": "Round interactive objects, never the standing window composition. Use the documented purpose-specific radius rather than an arbitrary new value.", "section": "shapes" },
+      { "name": "The Local Tactility Rule", "body": "Controls respond where the owner is acting through restrained tonal change, border emphasis, and visible focus rather than decorative motion.", "section": "components" }
+    ],
+    "dos": [
+      "**Do** keep Attention, Projects, and Fleet inside the same stable shell and preserve selection and command context when switching.",
+      "**Do** label demo, read-only, observed, inferred, stale, unsupported, failed, and partial-evidence states honestly.",
+      "**Do** use the canonical app mark and code-native SVG icons; keep provider identity in text rather than brand logos.",
+      "**Do** keep Quiet Gray and Evidence Amber above 4.5:1 on every relevant surface, preserve visible keyboard focus, and respect reduced motion.",
+      "**Do** preserve text or shape alongside every semantic color."
+    ],
+    "donts": [
+      "**Don't** compose the home experience as a SaaS admin dashboard, KPI strip, analytics-card grid, or wide management table.",
+      "**Don't** turn the shell into a retro terminal, control room, clinical triage surface, or provider-branded console.",
+      "**Don't** scatter shadows across ordinary rows or promote every bounded group into a card.",
+      "**Don't** use green as general decoration or collapse different evidence qualities into one healthy-looking state.",
+      "**Don't** imply that read-only or partially evidenced controls have live authority."
+    ]
+  }
+}

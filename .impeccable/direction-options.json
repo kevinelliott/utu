@@ -1,0 +1,76 @@
+{
+  "title": "Choose Utu's visual world",
+  "question": "Keep Attention Rounds, choose a challenger, or re-roll with a steer.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Attention Rounds",
+      "kicker": "PROPOSED WORLD",
+      "lineage": "clinical shift handoff and triage boards",
+      "thesis": "Every agent becomes a concise case handoff: evidence, urgency, owner, and next action.",
+      "palette": ["#f5f7f5", "#14231d", "#277a5d", "#e9b949", "#c84a3a"],
+      "materials": ["enamel board", "clipped paper", "label strips", "fine ruled dividers"],
+      "viewport": "A quiet left rail opens onto one large attention field: needs-you cases lead, live work runs alongside, and fleet health closes the scan.",
+      "risk": "The clinical lineage can feel severe if routine work is written like an emergency.",
+      "sketch": ".impeccable/sketches/attention-rounds.webp"
+    },
+    {
+      "id": "challenger-six-pack",
+      "label": "Night Cross-check",
+      "kicker": "CHALLENGER",
+      "lineage": "small-aircraft instrument six-pack",
+      "thesis": "A fixed constellation of instruments makes every operational truth cross-checkable at a glance.",
+      "palette": ["#111512", "#f3f5ed", "#8fbf78", "#d8a84e", "#c45b52"],
+      "materials": ["matte instrument panel", "luminous markings", "placard labels", "damped needles"],
+      "viewport": "Six ranked status instruments own attention, activity, cost, authentication, isolation, and delivery while project detail unfolds below.",
+      "case": "Strong technical recognition and excellent cross-check clarity; loses on the light operating scene and broad project hierarchy.",
+      "risk": "Its near-black panel conflicts with the requested lightness and can reduce complex work to six headline readings.",
+      "sketch": ".impeccable/sketches/night-cross-check.webp",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-night-flight-six-pack-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/signals-instruments-night-flight-six-pack.webp"
+    },
+    {
+      "id": "challenger-ascii",
+      "label": "Live Character Field",
+      "kicker": "CHALLENGER",
+      "lineage": "live scenes rendered as typewriter characters",
+      "thesis": "The entire fleet resolves into one living character grid whose density reveals activity and exceptions.",
+      "palette": ["#101512", "#b8d6a3", "#e8f1de", "#d7a64d"],
+      "materials": ["phosphor grid", "glyph density", "terminal captions", "text-native motion"],
+      "viewport": "A selectable glyph field maps every active agent and project, with one focused handoff rendered legibly beside it.",
+      "case": "Immediately identifies with CLI operators; loses product clarity when tasks, costs, and health compete inside one glyph system.",
+      "risk": "The terminal grammar can make cloud agents feel secondary and dense operational details harder to compare.",
+      "sketch": ".impeccable/sketches/live-character-field.webp",
+      "hero": "https://impeccable.style/worlds/cards/medium-native-ascii-live-scene-render-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/medium-native-ascii-live-scene-render.webp"
+    },
+    {
+      "id": "challenger-pc98",
+      "label": "Sixteen-color Workbench",
+      "kicker": "CHALLENGER",
+      "lineage": "Japanese PC-98 sixteen-color software",
+      "thesis": "Fixed functional regions swap content without moving the operator's learned map.",
+      "palette": ["#f4f0dc", "#172a4d", "#2c8b7a", "#d68c45", "#9d3f56"],
+      "materials": ["integer pixel grid", "ordered dithers", "bordered windows", "inverted selections"],
+      "viewport": "A permanent project field, attention window, and agent portrait strip update cell by cell without layout drift.",
+      "case": "Distinct, stateful, and performance-minded; loses audience identification by reading as nostalgic game software.",
+      "risk": "Its retro character can overpower the seriousness of permissions, costs, and execution isolation.",
+      "sketch": ".impeccable/sketches/sixteen-color-workbench.webp",
+      "hero": "https://impeccable.style/worlds/cards/digital-design-canon-pc98-sixteen-color-field-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/digital-design-canon-pc98-sixteen-color-field.webp"
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "canon": true,
+  "canonCard": {
+    "label": "Polished SaaS Console",
+    "lineage": "the familiar provider dashboard",
+    "thesis": "A conventional light sidebar, metric cards, tables, and filters executed at full craft.",
+    "palette": ["#f7f8fa", "#17202a", "#356ae6", "#e4e8ee"],
+    "materials": ["white cards", "soft separators", "compact tables", "standard controls"],
+    "viewport": "A left navigation rail, headline metrics, recent agent activity, and an issues table in the expected arrangement.",
+    "risk": "Highly familiar, but the product's provider-neutral attention mechanism becomes visually interchangeable with ordinary admin software.",
+    "sketch": ".impeccable/sketches/polished-saas-console.webp"
+  }
+}

@@ -1,0 +1,23 @@
+[package]
+name = "utu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[lib]
+name = "utu_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+utu-connectors = { path = "../crates/dashboard-connectors" }
+utu-core = { path = "../crates/dashboard-core" }
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-log = "2.9.0"
+tauri-plugin-window-state = "2.4.1"

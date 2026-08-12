@@ -1,0 +1,21 @@
+{
+  "title": "Approve Utu's native app shell",
+  "question": "These are three states of one installed app: Attention, Projects, and Fleet. Approve the set or use the note field to name what still feels wrong.",
+  "options": [
+    {
+      "id": "approve-native-shell",
+      "label": "Unified native workspace",
+      "kicker": "REPLACEMENT SET",
+      "lineage": "Buzz-like fixed shell, Grok Bot-like focus",
+      "thesis": "One compact app shell preserves context while Attention, Projects, and Fleet each center the work appropriate to that view.",
+      "palette": ["#E9EEF0", "#FCFCFD", "#18221F", "#1F7A5A", "#C78526"],
+      "materials": ["native window chrome", "inset work surface", "context rail", "transient inspector"],
+      "viewport": "Attention opens as an owner inbox; Projects as a living project work stream; Fleet as an agent session and roster—all with the same rails and direct-control composer.",
+      "risk": "The generated screens vary slightly in rail details; implementation must normalize them into one exact shell rather than reproducing those inconsistencies.",
+      "sketch": ".impeccable/mocks/app-shell-set.webp"
+    }
+  ],
+  "reroll": false,
+  "steer": true,
+  "canon": false
+}

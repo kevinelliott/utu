@@ -1,0 +1,45 @@
+{
+  "title": "Choose Utu's home composition",
+  "question": "The visual world is fixed. Choose the operating model to carry into the Rust/Leptos build.",
+  "options": [
+    {
+      "id": "attention-split",
+      "label": "Attention-led split",
+      "kicker": "FASTEST INTERVENTION",
+      "lineage": "owner inbox plus live fleet",
+      "thesis": "Everything needing a decision leads; current work stays visible beside it.",
+      "palette": ["#F7F8FA", "#17202A", "#356AE6", "#2D7A5F", "#B97818"],
+      "materials": ["open lists", "fine rules", "compact controls", "status text"],
+      "viewport": "A 62/38 split gives owner decisions the larger field and live agents the narrower field, with fleet truth along the bottom.",
+      "risk": "Projects become context inside rows rather than the primary spatial model.",
+      "sketch": ".impeccable/mocks/attention-split.webp"
+    },
+    {
+      "id": "project-workbench",
+      "label": "Project-led workbench",
+      "kicker": "DEEPEST CONTEXT",
+      "lineage": "project index, task table, and inspector",
+      "thesis": "The selected project holds tasks, agents, sessions, evidence, and owner controls in one stable workspace.",
+      "palette": ["#F7F8FA", "#17202A", "#356AE6", "#2D7A5F", "#B97818"],
+      "materials": ["dense table", "quiet inspector", "persistent exceptions", "connector footer"],
+      "viewport": "A project list, task table, and selected-task inspector form the core, while an exception bar keeps attention visible.",
+      "risk": "The home view feels more like managing one project than surveying the whole fleet.",
+      "sketch": ".impeccable/mocks/project-workbench.webp"
+    },
+    {
+      "id": "fleet-activity",
+      "label": "Fleet-led activity",
+      "kicker": "RICHEST OBSERVABILITY",
+      "lineage": "fleet index, evidence timeline, and decision rail",
+      "thesis": "A live evidence stream makes agents, handoffs, tool use, inference, cost, and owner decisions observable together.",
+      "palette": ["#F7F8FA", "#17202A", "#356AE6", "#2D7A5F", "#B97818"],
+      "materials": ["activity stream", "grouped fleet", "expanded logs", "decision rail"],
+      "viewport": "Fleet state anchors the left, a live session timeline owns the center, and three owner decisions remain sticky on the right.",
+      "risk": "Continuous events can dominate the quieter project and task-management workflows.",
+      "sketch": ".impeccable/mocks/fleet-activity.webp"
+    }
+  ],
+  "reroll": false,
+  "steer": true,
+  "canon": false
+}
