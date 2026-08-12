@@ -1,7 +1,6 @@
 use leptos::prelude::*;
 
 use crate::{
-    app::AppView,
     components::{
         AgentAvatar, EvidenceTag, ICON_BRANCH, ICON_CHECK, ICON_CHEVRON_RIGHT, ICON_CLOSE,
         ICON_FILE, ICON_FOLDER, ICON_LOCK, ICON_MORE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP,
@@ -13,7 +12,7 @@ use crate::{
 #[component]
 pub fn LiveWorkspaceView(
     inspector_open: RwSignal<bool>,
-    active_view: RwSignal<AppView>,
+    on_review_evidence: Callback<()>,
 ) -> impl IntoView {
     let live = expect_context::<LiveStatus>();
     let actions = expect_context::<WorkspaceActionSink>();
@@ -93,7 +92,7 @@ pub fn LiveWorkspaceView(
                         <Show when=move || live.recordable_session_id().is_none()>
                             <button class="secondary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::RefreshConnector("all connectors".into()))>"Run connector checks"</button>
                         </Show>
-                        <button class="text-button" type="button" on:click=move |_| active_view.set(AppView::Integrations)>"Review capability evidence"</button>
+                        <button class="text-button" type="button" on:click=move |_| on_review_evidence.run(())>"Review capability evidence"</button>
                     </div>
                 </Show>
             </div>
