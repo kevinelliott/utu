@@ -4246,6 +4246,24 @@ input:focus-visible {
   font-size: 9.5px;
 }
 
+.path-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.path-input-row .path-input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.path-browse-button {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
 .native-form-field > small {
   color: var(--muted);
   font-size: 8.5px;

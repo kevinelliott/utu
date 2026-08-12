@@ -1,7 +1,8 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::{mpsc, Arc}};
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use tauri_plugin_dialog::DialogExt;
 use utu_connectors::{
     AdapterCapabilities, ConnectorDescriptor, DiagnosticReport, ProblemCode, Readiness,
     diagnose_known_connectors, known_connector_descriptors,
@@ -172,6 +173,20 @@ pub struct SearchInput {
 pub struct DeleteInput {
     pub id: String,
     pub confirmation: String,
+}
+
+#[tauri::command]
+pub async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
+    let (tx, rx) = mpsc::channel();
+    app.dialog().file().pick_folder(move |path| {
+        let _ = tx.send(path);
+    });
+    tauri::async_runtime::spawn_blocking(move || {
+        rx.recv().ok().flatten().map(|p| p.to_string())
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 #[tauri::command]

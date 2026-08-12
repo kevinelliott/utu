@@ -21,6 +21,7 @@ utu-store = { path = "../crates/utu-store" }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2"
 tauri-plugin-log = "2.9.0"
 tauri-plugin-window-state = "2.4.1"
 

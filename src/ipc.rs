@@ -138,6 +138,7 @@ pub struct ProviderDeliveryEligibility {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectCostSummary {
     pub project_id: String,
     pub amount: CostAmount,
@@ -542,6 +543,10 @@ pub async fn project_file_preview(
     .await
 }
 
+pub async fn pick_folder() -> Result<Option<String>, String> {
+    invoke("pick_folder", &EmptyArgs {}).await
+}
+
 async fn invoke<T: DeserializeOwned>(command: &str, args: &impl Serialize) -> Result<T, String> {
     let invoke = tauri_invoke().ok_or_else(|| {
         "The native Utu command bridge is unavailable on this surface.".to_owned()
@@ -657,7 +662,14 @@ mod tests {
                     "agent_messages": true
                 }
             }],
-            "sessions": [], "integrations": [], "attention": [], "handoffs": [], "costs": [],
+            "sessions": [], "integrations": [], "attention": [], "handoffs": [],
+            "costs": [{
+                "projectId": "project-1",
+                "amount": { "currency": "USD", "micros": null, "confidence": "unknown" },
+                "knownRecords": 0,
+                "unknownRecords": 0,
+                "complete": false
+            }],
             "providerDelivery": []
         });
 

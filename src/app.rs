@@ -1,4 +1,4 @@
-use leptos::prelude::*;
+use leptos::{prelude::*, task::spawn_local};
 
 use crate::{
     components::{
@@ -6,6 +6,7 @@ use crate::{
         ICON_FOLDER, ICON_HOME, ICON_NODES, ICON_PLUG, ICON_PLUS, ICON_SEARCH, ICON_SETTINGS, Icon,
         StatusDot, WorkspaceNav,
     },
+    ipc,
     views::{
         attention::{AttentionInspector, AttentionView},
         fleet::{FleetInspector, FleetView},
@@ -414,23 +415,49 @@ fn CreateProjectSheet(open: RwSignal<bool>) -> impl IntoView {
 
                     <label class="native-form-field" for="project-root">
                         <span>"Local root folder"</span>
-                        <input
-                            id="project-root"
-                            class="path-input"
-                            type="text"
-                            maxlength="4096"
-                            autocomplete="off"
-                            spellcheck="false"
-                            placeholder="/Users/you/Projects/utu"
-                            disabled=move || live.project_creating.get()
-                            prop:value=move || root_path.get()
-                            on:input=move |event| {
-                                root_path.set(event_target_value(&event));
-                                validation_error.set(None);
-                                live.project_create_error.set(None);
-                            }
-                        />
-                        <small>"Use an absolute path to a folder already on this device. Utu resolves and verifies it natively; a folder picker can be added separately."</small>
+                        <div class="path-input-row">
+                            <input
+                                id="project-root"
+                                class="path-input"
+                                type="text"
+                                maxlength="4096"
+                                autocomplete="off"
+                                spellcheck="false"
+                                placeholder="/Users/you/Projects/utu"
+                                disabled=move || live.project_creating.get()
+                                prop:value=move || root_path.get()
+                                on:input=move |event| {
+                                    root_path.set(event_target_value(&event));
+                                    validation_error.set(None);
+                                    live.project_create_error.set(None);
+                                }
+                            />
+                            <button
+                                class="secondary-button path-browse-button"
+                                type="button"
+                                disabled=move || live.project_creating.get()
+                                on:click=move |_| {
+                                    let root_path = root_path;
+                                    let validation_error = validation_error;
+                                    spawn_local(async move {
+                                        match ipc::pick_folder().await {
+                                            Ok(Some(path)) => {
+                                                root_path.set(path);
+                                                validation_error.set(None);
+                                                live.project_create_error.set(None);
+                                            }
+                                            Ok(None) => {}
+                                            Err(error) => {
+                                                validation_error.set(Some(format!(
+                                                    "Folder picker failed: {error}"
+                                                )));
+                                            }
+                                        }
+                                    });
+                                }
+                            >"Browse…"</button>
+                        </div>
+                        <small>"Use an absolute path to a folder already on this device. Utu resolves and verifies it natively."</small>
                     </label>
 
                     <Show when=move || validation_error.get().is_some() || live.project_create_error.get().is_some()>

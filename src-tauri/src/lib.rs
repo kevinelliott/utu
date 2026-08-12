@@ -32,6 +32,7 @@ fn host_summary() -> serde_json::Value {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -57,6 +58,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             detect_local_clis,
             host_summary,
+            commands::pick_folder,
             codex_commands::sync_codex_sessions,
             commands::connector_catalog,
             commands::refresh_connectors,
