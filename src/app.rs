@@ -275,7 +275,7 @@ pub fn App() -> impl IntoView {
 
                     <Show when=move || active_view.get() == AppView::Workspace>
                         <Show when=move || live.is_desktop() fallback=move || view! { <WorkspaceView inspector_open read_only notice /> }>
-                            <LiveWorkspaceView inspector_open notice />
+                            <LiveWorkspaceView inspector_open active_view />
                         </Show>
                     </Show>
                     <Show when=move || active_view.get() == AppView::Attention>

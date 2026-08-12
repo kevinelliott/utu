@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 
 use crate::{
+    app::AppView,
     components::{
         AgentAvatar, EvidenceTag, ICON_BRANCH, ICON_CHECK, ICON_CHEVRON_RIGHT, ICON_CLOSE,
         ICON_FILE, ICON_FOLDER, ICON_LOCK, ICON_MORE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP,
@@ -12,7 +13,7 @@ use crate::{
 #[component]
 pub fn LiveWorkspaceView(
     inspector_open: RwSignal<bool>,
-    notice: RwSignal<Option<String>>,
+    active_view: RwSignal<AppView>,
 ) -> impl IntoView {
     let live = expect_context::<LiveStatus>();
     let actions = expect_context::<WorkspaceActionSink>();
@@ -70,8 +71,30 @@ pub fn LiveWorkspaceView(
                 <Show when=move || live.phase.get() == LoadPhase::Ready && !live.stream_loading.get() && live.session_stream.get().is_none_or(|stream| stream.messages.is_empty())>
                     <span class="live-workspace-glyph"><Icon path=ICON_TERMINAL /></span>
                     <h2>{move || if live.recordable_session_id().is_some() { "Stored session selected" } else { "No eligible stored session" }}</h2>
-                    <p>{move || if live.selected_session_can_deliver() { "This Codex session can receive an explicitly armed direction. Utu requests provider read-only/no-network policy, does not independently verify enforcement, and never treats acknowledgement as completion." } else if live.recordable_session_id().is_some() { "Utu can record an owner direction locally. This session has no active provider delivery capability." } else { "Select a non-demonstration session to record owner intent locally." }}</p>
-                    <button class="text-button" type="button" on:click=move |_| notice.set(Some("Connector capability reports describe adapter support; they do not prove that an active control transport is attached.".into()))>"Review capability evidence"</button>
+                    <p>{move || {
+                        if live.selected_session_can_deliver() {
+                            "This Codex session can receive an explicitly armed direction. Utu requests provider read-only/no-network policy, does not independently verify enforcement, and never treats acknowledgement as completion."
+                        } else if live.recordable_session_id().is_some() {
+                            "Utu can record an owner direction locally. This session has no active provider delivery capability."
+                        } else if live.selected_session_id.get().is_some() {
+                            "A stored session was found but its connector is not eligible for owner direction. Review connector evidence in Integrations and re-run checks to attach an active control transport."
+                        } else {
+                            "No stored sessions for this project. Sync sessions from Codex CLI or run connector checks to discover eligible agents."
+                        }
+                    }}</p>
+                    <div class="live-empty-actions">
+                        <Show when=move || live.recordable_session_id().is_none() && live.selected_project_id.get().is_some()>
+                            <button class="secondary-button" type="button" disabled=move || live.codex_syncing.get() on:click=move |_| {
+                                if let Some(project_id) = live.selected_project_id.get_untracked() {
+                                    actions.dispatch(WorkspaceAction::SyncCodexProject(project_id));
+                                }
+                            }>"Sync Codex sessions"</button>
+                        </Show>
+                        <Show when=move || live.recordable_session_id().is_none()>
+                            <button class="secondary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::RefreshConnector("all connectors".into()))>"Run connector checks"</button>
+                        </Show>
+                        <button class="text-button" type="button" on:click=move |_| active_view.set(AppView::Integrations)>"Review capability evidence"</button>
+                    </div>
                 </Show>
             </div>
 
