@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.kevinelliott.utu",
   "build": {
-    "beforeDevCommand": "trunk serve --port 1421",
+    "beforeDevCommand": "mise exec -- trunk serve --port 1421",
     "devUrl": "http://127.0.0.1:1421",
-    "beforeBuildCommand": "trunk build --release --locked",
+    "beforeBuildCommand": "mise exec -- trunk build --release --locked",
     "frontendDist": "../dist"
   },
   "app": {
