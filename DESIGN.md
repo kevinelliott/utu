@@ -245,7 +245,7 @@ The palette is a pale mineral field with spruce-green authority, warm evidence c
 **Body Font:** Platform system UI sans (`ui-sans-serif` with Apple system and Segoe UI Variable/Segoe UI fallbacks)
 **Label/Mono Font:** System UI sans for labels; system monospace (`ui-monospace`, SFMono-Regular, Menlo, Consolas) for logs, diffs, commands, and tool activity
 
-**Character:** The typography is compact and plainspoken, using weight and small spacing changes instead of font-family theatrics. Negative tracking tightens work-surface headings; uppercase labels provide quiet structure; monospace appears only where the content is genuinely machine-shaped.
+**Character:** The typography is compact and plainspoken, using weight and small spacing changes instead of font-family theatrics. Negative tracking tightens work-surface headings; uppercase labels provide quiet structure at reduced weight (600) and tighter tracking (0.045em) so they guide the eye without competing with content; monospace appears only where the content is genuinely machine-shaped.
 
 ### Hierarchy
 
@@ -264,7 +264,7 @@ The palette is a pale mineral field with spruce-green authority, warm evidence c
 
 The desktop shell is a full-height installed workspace with a 52px integrated titlebar and a four-column operating frame: 56px utility rail, 252px contextual rail, flexible work surface, and an optional 326px inspector. On macOS the native traffic lights sit inside the overlay titlebar; drag regions occupy only non-interactive chrome. Other platforms retain their native window controls above the same compact application toolbar. The work surface is the visual center. Streams use dividers and aligned bands rather than grids of summary cards; work toolbars are 56px high, controls stay close to their target, and reading lines remain compact.
 
-At 1180px and below, the inspector overlays the right edge and the standing rails tighten to 54px and 230px. At 820px and below, the utility rail becomes a 54px bottom bar, the contextual rail becomes a transient drawer, the work surface occupies the first row, and secondary toolbar density is removed. At 480px and below, labels and metadata reduce further while essential state shapes and primary actions remain. The native window targets a minimum useful size of 880×620px; the web status surface keeps the same visual language but disables owner-only actions.
+At 1180px and below, the inspector overlays the right edge and the standing rails tighten to 54px and 230px. At 820px and below, the utility rail becomes a 54px bottom bar, the contextual rail becomes a transient drawer, the work surface occupies the first row, and secondary toolbar density is removed. At 480px and below, labels and metadata reduce further while essential state shapes and primary actions remain. The native window targets a minimum useful size of 880×620px; the current web demonstration shell keeps the same visual language, labels all sample state, and disables owner-only actions. A live web status projection remains planned.
 
 **The One Window Rule.** Compose Utu edge to edge as one installed window. Rails, work surface, and standing inspector meet on structural dividers; do not float a rounded website shell over a page-like background.
 
@@ -311,10 +311,10 @@ Chips are evidence or context, never decoration.
 Containers feel structural rather than collectible.
 
 - **Corner Style:** 12px for selected or expanded task groups; square joins for the shell, rails, work surface, and standing inspector.
-- **Background:** Work Surface for the main plane, Raised White for local bounded content, and Soft Field for recessed evidence.
+- **Background:** Work Surface for the main plane; inline content blocks (execution plan, tool call, diff) use a transparent background so the border alone provides separation. Raised White for the composer and controls that need local elevation. Soft Field for recessed log/chip evidence.
 - **Shadow Strategy:** Borders and tonal layering at rest; use the documented shadows only at their named depth.
-- **Border:** Fine Divider for ordinary separation; green-mixed borders only for the current selection.
-- **Internal Padding:** Compact 8–16px increments observed across rows, streams, and inspectors.
+- **Border:** Fine Divider for ordinary separation; inline content cards and conversation-stream separators use `color-mix(in srgb, var(--line) 60–65%, transparent)` to keep density light; green-mixed borders only for the current selection.
+- **Internal Padding:** Compact 8–16px increments observed across rows, streams, and inspectors; conversation turns use 22px vertical padding for breathing room.
 
 ### Inputs / Fields
 
@@ -327,6 +327,8 @@ The composer is a locally elevated work control, not a form card.
 ### Navigation
 
 The utility rail uses icon-and-shape navigation with text supplied accessibly, while the contextual three-way switch uses compact labeled tabs. Active state combines a pale selection field with Deep Owner Green. Session tabs use a 2px green underline rather than another filled control. At narrow widths, the utility rail moves intact to the bottom and the contextual rail becomes transient.
+
+The workspace back/forward nav (`.workspace-nav`) is rendered without a border or background pill; the individual icon-buttons retain their hover state, keeping the region interactive without adding chrome. The three-way view switch (`.view-switch`) uses a semi-transparent Soft Field background so it reads as structure without adding visual weight against the work surface.
 
 ### App Mark
 

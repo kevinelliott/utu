@@ -1,10 +1,22 @@
+mod clock;
+mod codex_commands;
+mod codex_runtime;
+mod commands;
+mod project_files;
+mod state;
+
 use std::env;
+use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 use utu_connectors::{EnvironmentPath, LocalCliProbe, probe_known_local_clis};
 
+use crate::state::AppState;
+
 #[tauri::command]
-fn detect_local_clis() -> Vec<LocalCliProbe> {
-    probe_known_local_clis(&EnvironmentPath)
+async fn detect_local_clis() -> Result<Vec<LocalCliProbe>, String> {
+    tauri::async_runtime::spawn_blocking(|| probe_known_local_clis(&EnvironmentPath))
+        .await
+        .map_err(|error| format!("local CLI discovery worker failed: {error}"))
 }
 
 #[tauri::command]
@@ -29,7 +41,45 @@ pub fn run() {
                 ])
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![detect_local_clis, host_summary])
+        .setup(|app| {
+            let data_directory = app
+                .path()
+                .app_local_data_dir()
+                .map_err(|error| format!("could not resolve the Utu data directory: {error}"))?;
+            let state =
+                tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || {
+                    AppState::open(data_directory)
+                }))
+                .map_err(|error| format!("local store initialization worker failed: {error}"))??;
+            app.manage(state);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            detect_local_clis,
+            host_summary,
+            codex_commands::sync_codex_sessions,
+            commands::connector_catalog,
+            commands::refresh_connectors,
+            commands::workspace_snapshot,
+            commands::session_stream,
+            commands::create_project,
+            commands::save_project,
+            commands::delete_project,
+            commands::create_task,
+            commands::save_task,
+            commands::delete_task,
+            commands::assign_task_agents,
+            commands::delete_agent,
+            commands::create_session,
+            commands::delete_session,
+            commands::send_direction,
+            commands::request_control,
+            commands::create_handoff,
+            commands::resolve_attention,
+            commands::search_workspace,
+            commands::project_directory,
+            commands::project_file_preview,
+        ])
         .run(tauri::generate_context!())
         .expect("Utu failed to start");
 }
@@ -40,7 +90,7 @@ mod tests {
 
     #[test]
     fn unknown_binary_is_not_reported_as_authenticated() {
-        let probes = detect_local_clis();
+        let probes = probe_known_local_clis(&EnvironmentPath);
         assert!(
             probes
                 .iter()

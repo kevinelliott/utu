@@ -1,9 +1,15 @@
 use leptos::prelude::*;
 
-use crate::app::AppView;
-
 pub const ICON_HOME: &str =
     "M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5zm6 10v-6h6v6";
+pub const ICON_ATTENTION: &str = "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4";
+pub const ICON_FOLDER: &str = "M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z";
+pub const ICON_BRANCH: &str = "M6 3v12a4 4 0 0 0 4 4h5m0 0-3-3m3 3-3 3M18 3v4a4 4 0 0 1-4 4H6";
+pub const ICON_TERMINAL: &str = "m4 6 5 5-5 5m8 0h8";
+pub const ICON_LOCK: &str = "M6 10h12v11H6zm3 0V7a3 3 0 0 1 6 0v3";
+pub const ICON_CHEVRON_RIGHT: &str = "m9 18 6-6-6-6";
+pub const ICON_REFRESH: &str = "M20 7v5h-5M4 17v-5h5m9.6-3A8 8 0 0 0 5 7m.4 8A8 8 0 0 0 19 17";
+pub const ICON_CLOUD: &str = "M7 18h11a4 4 0 0 0 .7-7.9A7 7 0 0 0 5.4 8.4 4.8 4.8 0 0 0 7 18z";
 pub const ICON_SEARCH: &str = "m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0";
 pub const ICON_NODES: &str =
     "M8 6h8M8 18h8M6 8v8m12-8v8M6 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6m12 12a3 3 0 1 0 0 6 3 3 0 0 0 0-6";
@@ -61,35 +67,6 @@ pub fn AgentAvatar(
 #[component]
 pub fn StatusDot(#[prop(default = "healthy")] tone: &'static str) -> impl IntoView {
     view! { <span class=format!("status-dot status-{tone}") aria-hidden="true"></span> }
-}
-
-#[component]
-pub fn ViewSwitch(active: RwSignal<AppView>) -> impl IntoView {
-    view! {
-        <div class="view-switch" role="tablist" aria-label="Workspace view">
-            <button
-                type="button"
-                role="tab"
-                aria-selected=move || (active.get() == AppView::Attention).to_string()
-                class=move || if active.get() == AppView::Attention { "is-active" } else { "" }
-                on:click=move |_| active.set(AppView::Attention)
-            >"Attention"</button>
-            <button
-                type="button"
-                role="tab"
-                aria-selected=move || (active.get() == AppView::Projects).to_string()
-                class=move || if active.get() == AppView::Projects { "is-active" } else { "" }
-                on:click=move |_| active.set(AppView::Projects)
-            >"Projects"</button>
-            <button
-                type="button"
-                role="tab"
-                aria-selected=move || (active.get() == AppView::Fleet).to_string()
-                class=move || if active.get() == AppView::Fleet { "is-active" } else { "" }
-                on:click=move |_| active.set(AppView::Fleet)
-            >"Fleet"</button>
-        </div>
-    }
 }
 
 #[component]

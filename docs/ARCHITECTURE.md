@@ -2,7 +2,10 @@
 
 ## Shape of the system
 
-Utu uses one provider-neutral Rust domain behind two surfaces. The Tauri app is the authority for control, credentials, local discovery, and persistence. The browser surface consumes a restricted projection and is read-only by default.
+Utu uses one provider-neutral Rust domain behind two interface builds. The
+Tauri app is the authority for control, local discovery, and persistence. The
+current browser build is a read-only demonstration shell; a restricted live
+projection transport is planned but not implemented.
 
 ```text
 Tauri desktop (primary)        Browser status (secondary)
@@ -20,7 +23,13 @@ Tauri desktop (primary)        Browser status (secondary)
     host / sandbox / container / VM
 ```
 
-The current code implements the shared UI, core domain, initial attention policy, native host, and conservative executable discovery. The application/query layer, durable event store, connector supervisors, and live adapters are planned boundaries rather than current claims.
+The current code implements the shared UI, core domain, evidence policy, native
+query/command layer, durable SQLite store, secure project-file reads, and bounded
+local CLI diagnostics. It also contains one experimental Codex vertical slice:
+explicit single-project metadata sync and one-shot, owner-armed text direction.
+Transcript and response ingestion, event/file/cost projection, approval handling,
+long-running multi-provider supervision, cloud adapters, credentials, and
+isolation runtimes remain planned boundaries rather than current claims.
 
 ## Workspace responsibilities
 
@@ -30,11 +39,43 @@ Pure Rust and provider-neutral. Owns identity and serialization for providers, a
 
 ### `utu-connectors` (`crates/dashboard-connectors`)
 
-Rust integration boundary. It turns provider-specific observations into core types and declares only the capabilities an adapter can prove. Current scope is PATH-based executable discovery. Provider process supervision, structured output parsing, auth probes, session import, event normalization, and control receipts belong here or in provider-specific child crates.
+Rust diagnostic boundary. It turns provider-specific observations into core
+types and declares only the capabilities an adapter can prove. Current scope is
+deterministic PATH discovery plus bounded version and supported authentication
+probes for eight local CLI families. These registry profiles remain
+diagnostics-only; merely discovering potential App Server or ACP support never
+activates a control capability. Session transports, event normalization, live
+controls, and persistent supervisors belong in provider-specific child crates
+and the native composition layer.
+
+### `utu-codex` (`crates/utu-codex`)
+
+Bounded JSON-RPC-over-stdio client for the experimental Codex App Server. The
+crate implements initialize, thread list/read/resume/start, text turn start,
+typed notifications, resource limits, and fail-closed server-request rejection.
+The installed provider has been exercised only for initialize and `thread/list`;
+mutating calls and notification families are fake-process conformance-tested.
+The native application deliberately exposes a smaller surface than the crate.
+
+### `utu-store` (`crates/utu-store`)
+
+Thread-safe local SQLite authority. Owns migrations and repositories for normalized operational records, append-ordered message/event streams, cost confidence, attention, handoffs, control request/receipts, and literal-wildcard search. It never stores provider credentials. Unknown cost remains `NULL`, not zero.
 
 ### `utu` (`src-tauri`)
 
-Tauri composition root. Owns process lifetime, native permissions, OS keychain calls, local database location, filesystem watches, connector subprocesses, sandbox/VM coordination, window state, and local logging. Commands should delegate to Rust services rather than contain integration logic.
+Tauri composition root. Owns process lifetime, typed IPC, application-data
+location, connector diagnostic workers, canonical-root filesystem reads, window
+state, and local logging. It owns the experimental Codex runtime lease: a fresh
+diagnostic binds an exact executable to one explicitly selected canonical
+project root, metadata-only sync activates that project in memory, and restart
+or any explicit connector refresh revokes delivery until resync. A successful
+diagnostic refresh also revokes because Utu cannot yet attest a stable
+provider-account identity across diagnostic and App Server processes. Each live
+text direction is separately armed and requests read-only, no-network, never-approve
+provider policy. Blocking SQLite, process, and filesystem work is moved off the
+UI thread. Credential/keychain, filesystem watches, durable output projection,
+multi-provider session supervision, and sandbox/VM coordination are future
+services.
 
 ### `utu-ui` (workspace root)
 
@@ -51,11 +92,22 @@ All connector facts enter as evidence with a source, observation time, and evide
 
 Unknown, stale, and unsupported are real states. They must not collapse into healthy, authenticated, zero cost, or controllable.
 
-The durable store will be an append-oriented local event log with materialized projections for fast UI reads. Provider event IDs are retained where available; otherwise connectors create stable correlation and deduplication keys. Destructive controls produce request and receipt events so the owner can see what was asked, what was acknowledged, and what remains unconfirmed.
+The durable store is append-oriented for messages and events, with mutable materialized records for projects, tasks, agents, integrations, attention, and receipts. Provider event IDs are retained where available; otherwise connectors create stable correlation and deduplication keys. Destructive record deletes require an exact identifier confirmation. Control intent and provider receipt are separate records, so a locally recorded request never becomes a false acknowledgement.
 
 ## Process model
 
-Each connector runs under a supervisor with bounded concurrency, timeouts, cancellation, restart policy, and a health budget. A misbehaving adapter must not block the UI or the other adapters. High-volume stdout/stderr is parsed and persisted off the UI thread, then delivered as compact projection updates.
+Current diagnostic commands run off the UI thread with bounded output and
+per-process timeouts. The Codex vertical slice adds a bounded process-local
+client, but it is not a persistent supervisor: authorization is not restored
+after restart and provider notification payloads are discarded in metadata-only
+mode. The full supervisor—bounded concurrency, cancellation, restart policy,
+streaming backpressure, reconciliation, and health budgets—remains roadmap work.
+A misbehaving adapter must not block the UI or other adapters.
+
+A Codex `turn/start` response is stored as provider acknowledgement, not turn or
+task completion. Timeouts remain unknown until reconciled. Utu currently imports
+no provider responses, transcripts, events, costs, file changes, or approval
+requests, so it cannot present a complete live execution trace.
 
 Local execution targets are explicit:
 
@@ -65,8 +117,16 @@ Local execution targets are explicit:
 - local VM;
 - remote VM.
 
-The selected boundary and its observed health travel with every session. Isolation is opt-in in the first release; host execution remains available but is never mislabeled as sandboxed.
+The execution-mode enum reserves these provider-neutral targets, but the current
+durable session schema does not yet assert a boundary. The isolation milestone
+adds selected mode plus observed boundary health to every session. Until then,
+Utu must not label host activity as sandboxed or VM-isolated.
 
 ## Web boundary
 
-The web dashboard is not an alternate control authority. Its first delivery is a local read-only projection. Later remote exposure requires explicit enablement, authentication, scoped capabilities, encryption, origin restrictions, revocation, and an audit trail. Hosted relay and team synchronization are future extensions.
+The web dashboard is not an alternate control authority. The current build
+contains labeled sample states and no desktop-database transport. Its first live
+delivery will be a local read-only projection. Later remote exposure requires
+explicit enablement, authentication, scoped capabilities, encryption, origin
+restrictions, revocation, and an audit trail. Hosted relay and team
+synchronization are future extensions.

@@ -15,9 +15,14 @@ tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
 utu-connectors = { path = "../crates/dashboard-connectors" }
+utu-codex = { path = "../crates/utu-codex" }
 utu-core = { path = "../crates/dashboard-core" }
+utu-store = { path = "../crates/utu-store" }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.11.5", features = [] }
 tauri-plugin-log = "2.9.0"
 tauri-plugin-window-state = "2.4.1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.189"

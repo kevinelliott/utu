@@ -2,14 +2,15 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Utu",
   "version": "0.1.0",
-  "identifier": "app.utu.local",
+  "identifier": "com.kevinelliott.utu",
   "build": {
     "beforeDevCommand": "trunk serve --port 1421",
     "devUrl": "http://127.0.0.1:1421",
-    "beforeBuildCommand": "trunk build --release",
+    "beforeBuildCommand": "trunk build --release --locked",
     "frontendDist": "../dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Utu",

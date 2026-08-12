@@ -50,10 +50,65 @@ Agent-to-agent communication is an Utu handoff, not an invisible side channel. E
 
 ## Authentication and secrets
 
-Adapters receive short-lived secret access from the desktop credential service. Secrets are stored in the OS keychain, never in the event database, command-line arguments, telemetry, raw logs, or the browser surface. A connector should prefer an existing provider login and documented API over copying session material.
+The current diagnostic adapters inherit an existing provider CLI login and run
+only documented, non-destructive status commands. Utu does not copy or persist
+their credential material, and raw authentication command output must not cross
+the connector boundary.
+
+A future production credential service must grant adapters short-lived access
+and store secrets in the OS keychain, never in the event database, command-line
+arguments, telemetry, raw logs, or the browser surface. A connector should
+prefer an existing provider login and documented API over copying session
+material.
 
 Browser mediation is opt-in, visibly identified, and isolated from unrelated browser state. DOM automation is never described as an official provider API.
 
 ## Acceptance gates
 
 A connector is not production-ready until it has tests for absent binaries/configuration, malformed output, incompatible versions, expired login, network loss, process exit, hung probes, duplicate/reordered events, partial cost data, control timeout, redaction, and restart recovery. Provider terms and permitted automation must also be reviewed.
+
+## Implemented diagnostic profiles
+
+The current registry covers Codex, Claude Code, Grok Build, Cursor Agent,
+Antigravity, Gemini CLI, Aider, and OpenCode. All eight support deterministic
+discovery where an executable contract is known; version and authentication
+probes vary by verified provider surface. Codex, Claude Code, and Cursor have
+direct status probes. The others keep authentication `unsupported` rather than
+inspecting or guessing from credential files.
+
+The eight registry profiles above remain diagnostics-only. A descriptor's
+potential App Server or ACP support does not make it active or controllable.
+
+The Codex App Server crate implements and hostile-tests initialization, thread
+list/read/resume/start, text turn submission, typed notifications, resource
+bounds, and fail-closed server-request rejection. The installed Codex CLI has
+been exercised only for initialize and the read-only `thread/list` path.
+Mutating requests and notification families are fake-process conformance-tested,
+not exercised against owner sessions.
+
+The native application exposes a deliberately smaller, experimental slice:
+
+- metadata sync requires explicit confirmation for exactly one selected local
+  project and a fresh ready/authenticated diagnostic;
+- the runtime binds the exact observed executable, accepts only threads whose
+  canonical cwd exactly equals that project's canonical root, and authorizes
+  that project only for the current attached process;
+- restart, runtime loss, or any explicit connector refresh revokes effective
+  direct capability; explicit project resync is required. Even a successful
+  diagnostic refresh revokes because the current slice cannot attest a stable
+  provider-account identity across processes;
+- sync imports session/thread metadata only. Transcript bodies, agent responses,
+  notification payloads, provider events, file changes, costs, and approval
+  requests are discarded or not requested;
+- every provider-bound text direction needs a separate one-shot owner
+  confirmation and requests provider read-only, no-network, and `Never`
+  approval policies. These are requested provider settings, not verified host
+  sandbox or VM containment;
+- a `turn/start` response is an acknowledgement of acceptance, not evidence of
+  turn or task completion. Timeout or ambiguous failure remains unconfirmed.
+
+Approvals, response/event projection, costs, lifecycle controls, agent-to-agent
+delivery, cloud transports, and host isolation remain unsupported. Structured
+streams and ACP outside this bounded Codex client remain roadmap metadata. See
+`crates/dashboard-connectors/README.md` and
+`crates/utu-codex/README.md` for exact boundaries.

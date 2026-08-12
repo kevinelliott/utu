@@ -18,10 +18,17 @@ pub fn assess_agent(snapshot: &AgentSnapshot) -> AttentionFinding {
         };
     }
 
-    if matches!(
-        snapshot.evidence,
-        EvidenceKind::Stale | EvidenceKind::Unsupported
-    ) {
+    if snapshot.state == AgentState::Offline {
+        return AttentionFinding {
+            severity: Severity::NeedsAttention,
+            title: format!("{} is offline", snapshot.name),
+            recovery: Some("Check the connector and start or reconnect the agent.".into()),
+        };
+    }
+
+    if snapshot.evidence != EvidenceKind::Observed
+        || matches!(snapshot.auth, AuthState::Unknown | AuthState::Unsupported)
+    {
         return AttentionFinding {
             severity: Severity::Unknown,
             title: format!("{} status cannot be confirmed", snapshot.name),
@@ -59,6 +66,11 @@ mod tests {
     use super::*;
     use crate::{ControlCapabilities, IsolationMode};
 
+    #[test]
+    fn missing_truth_defaults_fail_closed() {
+        assert_eq!(EvidenceKind::default(), EvidenceKind::Inferred);
+        assert_eq!(Severity::default(), Severity::Unknown);
+    }
     fn snapshot() -> AgentSnapshot {
         AgentSnapshot {
             id: "codex-1".into(),
@@ -94,9 +106,37 @@ mod tests {
     }
 
     #[test]
+    fn inferred_or_default_evidence_is_unknown_not_healthy() {
+        for evidence in [EvidenceKind::Inferred, EvidenceKind::default()] {
+            let finding = assess_agent(&AgentSnapshot {
+                evidence,
+                ..snapshot()
+            });
+            assert_eq!(finding.severity, Severity::Unknown);
+        }
+    }
+
+    #[test]
+    fn unknown_or_unsupported_auth_is_unknown_not_healthy() {
+        for auth in [AuthState::Unknown, AuthState::Unsupported] {
+            let finding = assess_agent(&AgentSnapshot { auth, ..snapshot() });
+            assert_eq!(finding.severity, Severity::Unknown);
+        }
+    }
+
+    #[test]
     fn waiting_is_owner_attention() {
         let finding = assess_agent(&AgentSnapshot {
             state: AgentState::Waiting,
+            ..snapshot()
+        });
+        assert_eq!(finding.severity, Severity::NeedsAttention);
+    }
+
+    #[test]
+    fn offline_is_never_healthy() {
+        let finding = assess_agent(&AgentSnapshot {
+            state: AgentState::Offline,
             ..snapshot()
         });
         assert_eq!(finding.severity, Severity::NeedsAttention);
@@ -108,5 +148,13 @@ mod tests {
             crate::CostAmount::usd_estimate(1_420_000).display(),
             "~$1.42"
         );
+    }
+
+    #[test]
+    fn cost_display_does_not_hide_or_understate_subcent_values() {
+        assert_eq!(crate::CostAmount::usd_exact(1).display(), "<$0.01");
+        assert_eq!(crate::CostAmount::usd_estimate(9_999).display(), "~<$0.01");
+        assert_eq!(crate::CostAmount::usd_exact(14_999).display(), "$0.01");
+        assert_eq!(crate::CostAmount::usd_exact(15_000).display(), "$0.02");
     }
 }

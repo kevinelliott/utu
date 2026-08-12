@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 pub type EntityId = String;
 
@@ -14,8 +15,8 @@ pub enum ProviderKind {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EvidenceKind {
-    #[default]
     Observed,
+    #[default]
     Inferred,
     Stale,
     Unsupported,
@@ -37,8 +38,8 @@ impl EvidenceKind {
 pub enum Severity {
     Blocked,
     NeedsAttention,
-    #[default]
     Healthy,
+    #[default]
     Unknown,
 }
 
@@ -166,8 +167,20 @@ pub enum CostConfidence {
 pub struct CostAmount {
     pub currency: String,
     /// One millionth of the named currency. Integer storage avoids float drift.
-    pub micros: u64,
+    /// `None` means the amount is genuinely unknown. Unknown must never be
+    /// persisted as zero because zero is a concrete measured amount.
+    pub micros: Option<u64>,
     pub confidence: CostConfidence,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+pub enum CostInvariantError {
+    #[error("an unknown cost cannot contain a numeric amount")]
+    UnknownHasAmount,
+    #[error("a known cost must contain a numeric amount")]
+    KnownMissingAmount,
+    #[error("currency must be a three-letter ASCII code")]
+    InvalidCurrency,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -192,26 +205,81 @@ impl<T> Evidence<T> {
 }
 
 impl CostAmount {
+    pub fn new(
+        currency: impl Into<String>,
+        micros: Option<u64>,
+        confidence: CostConfidence,
+    ) -> Result<Self, CostInvariantError> {
+        let amount = Self {
+            currency: currency.into().to_ascii_uppercase(),
+            micros,
+            confidence,
+        };
+        amount.validate()?;
+        Ok(amount)
+    }
+
+    pub fn unknown(currency: impl Into<String>) -> Result<Self, CostInvariantError> {
+        Self::new(currency, None, CostConfidence::Unknown)
+    }
+
+    pub fn usd_exact(micros: u64) -> Self {
+        Self {
+            currency: "USD".into(),
+            micros: Some(micros),
+            confidence: CostConfidence::Exact,
+        }
+    }
+
     pub fn usd_estimate(micros: u64) -> Self {
         Self {
             currency: "USD".into(),
-            micros,
+            micros: Some(micros),
             confidence: CostConfidence::Estimated,
         }
     }
 
-    pub fn display(&self) -> String {
-        if self.confidence == CostConfidence::Unknown {
-            return "Unknown".into();
+    pub fn validate(&self) -> Result<(), CostInvariantError> {
+        if self.currency.len() != 3 || !self.currency.bytes().all(|byte| byte.is_ascii_alphabetic())
+        {
+            return Err(CostInvariantError::InvalidCurrency);
         }
 
-        let dollars = self.micros / 1_000_000;
-        let cents = (self.micros % 1_000_000) / 10_000;
+        match (self.confidence, self.micros) {
+            (CostConfidence::Unknown, Some(_)) => Err(CostInvariantError::UnknownHasAmount),
+            (CostConfidence::Unknown, None) => Ok(()),
+            (_, None) => Err(CostInvariantError::KnownMissingAmount),
+            (_, Some(_)) => Ok(()),
+        }
+    }
+
+    pub fn display(&self) -> String {
+        let Some(micros) = self.micros else {
+            return "Unknown".into();
+        };
+
         let prefix = match self.confidence {
             CostConfidence::Estimated | CostConfidence::Partial => "~",
             CostConfidence::Exact | CostConfidence::Unknown => "",
         };
-        format!("{prefix}${dollars}.{cents:02}")
+        if micros > 0 && micros < 10_000 {
+            return if self.currency.eq_ignore_ascii_case("USD") {
+                format!("{prefix}<$0.01")
+            } else {
+                format!("{prefix}<{} 0.01", self.currency)
+            };
+        }
+
+        // Round half up to display precision instead of silently understating
+        // known cost. `u128` keeps the upper `u64` boundary exact.
+        let rounded_cents = (u128::from(micros) + 5_000) / 10_000;
+        let units = rounded_cents / 100;
+        let cents = rounded_cents % 100;
+        if self.currency.eq_ignore_ascii_case("USD") {
+            format!("{prefix}${units}.{cents:02}")
+        } else {
+            format!("{prefix}{} {units}.{cents:02}", self.currency)
+        }
     }
 }
 
@@ -301,6 +369,33 @@ pub struct Provider {
     pub kind: ProviderKind,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IntegrationState {
+    Ready,
+    Degraded,
+    Disabled,
+    #[default]
+    Unknown,
+}
+
+/// A configured connector boundary. It contains normalized status only;
+/// credential material belongs in the operating-system keychain.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Integration {
+    pub id: EntityId,
+    pub provider_id: Option<EntityId>,
+    pub connector_key: String,
+    pub display_name: String,
+    pub kind: ProviderKind,
+    pub state: IntegrationState,
+    pub auth: AuthState,
+    pub evidence: EvidenceKind,
+    pub checked_at_unix_ms: Option<u64>,
+    pub problem: Option<String>,
+    pub capabilities: ConnectorCapabilities,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub id: EntityId,
@@ -325,6 +420,7 @@ pub enum EventKind {
     Cost,
     Problem,
     Handoff,
+    Log,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -335,8 +431,116 @@ pub struct SessionEvent {
     pub occurred_at_unix_ms: u64,
     pub kind: EventKind,
     pub summary: String,
+    pub detail: Option<String>,
     pub evidence: EvidenceKind,
+    pub source: String,
+    pub ingested_at_unix_ms: u64,
+    pub provider_event_id: Option<String>,
     pub correlation_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MessageRole {
+    Owner,
+    Agent,
+    #[default]
+    System,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Message {
+    pub id: EntityId,
+    pub session_id: EntityId,
+    pub sequence: u64,
+    pub role: MessageRole,
+    pub author_agent_id: Option<EntityId>,
+    pub body: String,
+    pub sent_at_unix_ms: u64,
+    pub ingested_at_unix_ms: u64,
+    pub evidence: EvidenceKind,
+    pub source: String,
+    pub correlation_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileChangeKind {
+    Added,
+    #[default]
+    Modified,
+    Deleted,
+    Renamed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct FileChange {
+    pub id: EntityId,
+    pub session_id: EntityId,
+    pub event_id: Option<EntityId>,
+    pub path: String,
+    pub previous_path: Option<String>,
+    pub kind: FileChangeKind,
+    pub additions: Option<u64>,
+    pub deletions: Option<u64>,
+    pub occurred_at_unix_ms: u64,
+    pub evidence: EvidenceKind,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CostRecord {
+    pub id: EntityId,
+    pub project_id: EntityId,
+    pub task_id: Option<EntityId>,
+    pub session_id: Option<EntityId>,
+    pub agent_id: Option<EntityId>,
+    pub amount: CostAmount,
+    pub occurred_at_unix_ms: u64,
+    pub ingested_at_unix_ms: u64,
+    pub evidence: EvidenceKind,
+    pub source: String,
+    pub note: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttentionState {
+    #[default]
+    Open,
+    Acknowledged,
+    Resolved,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AttentionRecord {
+    pub id: EntityId,
+    pub project_id: Option<EntityId>,
+    pub task_id: Option<EntityId>,
+    pub session_id: Option<EntityId>,
+    pub agent_id: Option<EntityId>,
+    pub integration_id: Option<EntityId>,
+    pub severity: Severity,
+    pub state: AttentionState,
+    pub title: String,
+    pub detail: Option<String>,
+    pub recovery: Option<String>,
+    pub detected_at_unix_ms: u64,
+    pub updated_at_unix_ms: u64,
+    pub evidence: EvidenceKind,
+    pub source: String,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HandoffState {
+    #[default]
+    Requested,
+    Approved,
+    Delivered,
+    Failed,
+    Canceled,
+    Unknown,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -349,6 +553,77 @@ pub struct AgentHandoff {
     pub instruction: String,
     pub created_at_unix_ms: u64,
     pub approved_by_owner: bool,
+    pub state: HandoffState,
+    pub delivered_at_unix_ms: Option<u64>,
+    pub delivery_evidence: EvidenceKind,
+    pub source: String,
+    pub resulting_session_id: Option<EntityId>,
+    pub correlation_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlAction {
+    Direct,
+    Pause,
+    Resume,
+    Stop,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlOutcome {
+    Acknowledged,
+    Rejected,
+    TimedOut,
+    Unsupported,
+    #[default]
+    Unknown,
+}
+
+/// Owner intent is recorded separately from provider acknowledgement. Merely
+/// writing this request never proves that a control reached the provider.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ControlRequest {
+    pub id: EntityId,
+    pub session_id: EntityId,
+    pub action: ControlAction,
+    pub instruction: Option<String>,
+    pub requested_at_unix_ms: u64,
+    pub requested_by_owner: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ControlReceipt {
+    pub id: EntityId,
+    pub request_id: EntityId,
+    pub outcome: ControlOutcome,
+    pub received_at_unix_ms: u64,
+    pub evidence: EvidenceKind,
+    pub source: String,
+    pub message: Option<String>,
+    pub provider_receipt_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchEntityKind {
+    Message,
+    Event,
+    FileChange,
+    Task,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SearchHit {
+    pub entity: SearchEntityKind,
+    pub id: EntityId,
+    pub project_id: EntityId,
+    pub session_id: Option<EntityId>,
+    pub occurred_at_unix_ms: u64,
+    pub title: String,
+    pub excerpt: String,
+    pub evidence: EvidenceKind,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
