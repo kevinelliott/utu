@@ -1,3 +1,4 @@
+mod about;
 mod app;
 mod components;
 #[cfg(test)]
@@ -7,5 +8,9 @@ mod views;
 mod workspace_data;
 
 fn main() {
-    leptos::mount::mount_to_body(app::App);
+    if crate::ipc::is_about_window() {
+        leptos::mount::mount_to_body(about::AboutWindow);
+    } else {
+        leptos::mount::mount_to_body(app::App);
+    }
 }

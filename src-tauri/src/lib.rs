@@ -1,3 +1,4 @@
+mod about;
 mod clock;
 mod codex_commands;
 mod codex_runtime;
@@ -33,7 +34,11 @@ fn host_summary() -> serde_json::Value {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_denylist(&[about::ABOUT_WINDOW_LABEL])
+                .build(),
+        )
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -42,6 +47,8 @@ pub fn run() {
                 ])
                 .build(),
         )
+        .menu(about::build_menu)
+        .on_menu_event(about::handle_menu_event)
         .setup(|app| {
             let data_directory = app
                 .path()
@@ -58,6 +65,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             detect_local_clis,
             host_summary,
+            about::close_about_window,
             commands::pick_folder,
             codex_commands::sync_codex_sessions,
             commands::connector_catalog,

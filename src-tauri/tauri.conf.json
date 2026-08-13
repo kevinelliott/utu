@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Utu",
+  "mainBinaryName": "Utu",
   "version": "0.1.0",
   "identifier": "com.kevinelliott.utu",
   "build": {
@@ -34,6 +35,9 @@
   },
   "bundle": {
     "active": false,
-    "targets": "all"
+    "targets": "all",
+    "macOS": {
+      "bundleName": "Utu"
+    }
   }
 }

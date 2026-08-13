@@ -577,9 +577,34 @@ fn tauri_invoke() -> Option<Function> {
 }
 
 fn web_status_requested() -> bool {
+    query_contains("surface=web") || query_contains("readonly=1")
+}
+
+pub fn is_about_window() -> bool {
+    query_contains("window=about")
+}
+
+pub fn query_param(name: &str) -> Option<String> {
+    let search = web_sys::window()?.location().search().ok()?;
+    param_from_search(&search, name)
+}
+
+pub(crate) fn param_from_search(search: &str, name: &str) -> Option<String> {
+    let query = search.trim_start_matches('?');
+    query.split('&').find_map(|pair| {
+        let (key, value) = pair.split_once('=')?;
+        (key == name).then(|| value.to_owned())
+    })
+}
+
+pub async fn close_about_window() -> Result<(), String> {
+    invoke("close_about_window", &EmptyArgs {}).await
+}
+
+fn query_contains(needle: &str) -> bool {
     web_sys::window()
         .and_then(|window| window.location().search().ok())
-        .is_some_and(|search| search.contains("surface=web") || search.contains("readonly=1"))
+        .is_some_and(|search| search.contains(needle))
 }
 
 fn js_error(value: JsValue) -> String {
@@ -678,5 +703,24 @@ mod tests {
         assert_eq!(snapshot.projects[0].root_path.as_deref(), Some("/tmp/utu"));
         assert!(snapshot.agents[0].capabilities.auth_probe);
         assert!(snapshot.agents[0].capabilities.agent_messages);
+    }
+}
+
+#[cfg(test)]
+mod query_param_tests {
+    use super::param_from_search;
+
+    #[test]
+    fn reads_about_window_and_version_from_search() {
+        let search = "?window=about&version=0.1.0";
+        assert_eq!(
+            param_from_search(search, "window").as_deref(),
+            Some("about")
+        );
+        assert_eq!(
+            param_from_search(search, "version").as_deref(),
+            Some("0.1.0")
+        );
+        assert_eq!(param_from_search(search, "surface"), None);
     }
 }
