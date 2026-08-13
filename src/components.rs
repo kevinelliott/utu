@@ -27,10 +27,11 @@ pub const ICON_ARROW: &str = "m9 18 6-6-6-6";
 pub const ICON_CHECK: &str = "m5 12 4 4L19 6";
 pub const ICON_FILE: &str = "M6 2h8l4 4v16H6zm8 0v6h6M9 13h6m-6 4h6";
 pub const ICON_SHIELD: &str = "M12 3 20 6v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z";
-pub const ICON_BACK: &str = "m15 18-6-6 6-6";
-pub const ICON_FORWARD: &str = "m9 18 6-6-6-6";
 pub const ICON_COMMAND: &str =
     "M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z";
+/// Radial/orbit icon for the Overview view.
+pub const ICON_ORBIT: &str =
+    "M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M5.2 18.8l2.1-2.1M16.7 7.3l2.1-2.1M12 3v2M12 19v2M3 12h2M19 12h2";
 
 #[component]
 pub fn AppMarkGlyph() -> impl IntoView {
@@ -78,17 +79,6 @@ pub fn DemoBadge(#[prop(default = false)] web: bool) -> impl IntoView {
         </span>
     }
 }
-
-#[component]
-pub fn WorkspaceNav() -> impl IntoView {
-    view! {
-        <div class="workspace-nav" aria-label="History controls">
-            <button class="icon-button compact" type="button" aria-label="Back"><Icon path=ICON_BACK /></button>
-            <button class="icon-button compact" type="button" aria-label="Forward"><Icon path=ICON_FORWARD /></button>
-        </div>
-    }
-}
-
 #[component]
 pub fn Composer(
     placeholder: &'static str,
@@ -141,5 +131,203 @@ pub fn EmptyInspectorButton(inspector_open: RwSignal<bool>) -> impl IntoView {
         <button class="icon-button" type="button" aria-label="Open details" on:click=move |_| inspector_open.set(true)>
             <Icon path=ICON_ARROW />
         </button>
+    }
+}
+
+/// Returns the background CSS color for a known connector.
+pub fn connector_bg_color(connector_id: &str) -> &'static str {
+    match connector_id {
+        "claude" | "claude-code" | "claude-sessions" | "claude-agent" => "#d07040",
+        "codex" | "codex-cli" => "#5b84c4",
+        "cursor" | "cursor-agent" | "cursor-sessions" => "#2d2d2d",
+        "gemini" => "#4285f4",
+        "aider" => "#e74c3c",
+        "opencode" => "#7c5cbf",
+        "grok" => "#5c6370",
+        "antigravity" => "#3a7d5c",
+        _ => "#65716c",
+    }
+}
+
+pub fn connector_initials(connector_id: &str) -> &'static str {
+    match connector_id {
+        "claude" | "claude-code" | "claude-sessions" | "claude-agent" => "CL",
+        "codex" | "codex-cli" => "CO",
+        "cursor" | "cursor-agent" | "cursor-sessions" => "CU",
+        "gemini" => "Ge",
+        "aider" => "Ai",
+        "opencode" => "OC",
+        "grok" => "GR",
+        "antigravity" => "AG",
+        _ => "?",
+    }
+}
+
+pub fn connector_display_name(connector_id: &str) -> &'static str {
+    match connector_id {
+        "claude" | "claude-code" | "claude-sessions" | "claude-agent" => "Claude Code",
+        "codex" | "codex-cli" => "Codex",
+        "cursor" | "cursor-agent" | "cursor-sessions" => "Cursor Agent",
+        "gemini" => "Gemini CLI",
+        "aider" => "Aider",
+        "opencode" => "OpenCode",
+        "grok" => "Grok Build",
+        "antigravity" => "Antigravity",
+        _ => "Agent",
+    }
+}
+
+/// Rows above/below the visible viewport that are still mounted as a buffer.
+const VIRTUAL_OVERSCAN: usize = 6;
+
+/// A fixed-height virtual scroll container.
+///
+/// Only rows within the visible viewport plus `VIRTUAL_OVERSCAN` rows on each
+/// side are mounted in the DOM. Top and bottom spacer divs maintain the correct
+/// scroll track height so the scroll thumb is always accurate.
+///
+/// `row_height` must match the rendered height of every item (px).  Group
+/// headers rendered as list items should be given the same height; the extra
+/// blank space is intentional and keeps the math simple.
+#[component]
+pub fn VirtualList<T, F, V>(
+    /// Full item list, re-evaluated on every scroll.
+    items: impl Fn() -> Vec<T> + Send + Sync + 'static,
+    /// Height of every row in pixels (uniform).
+    #[prop(default = 52.0_f64)] row_height: f64,
+    /// Renders one item into a view.
+    render_item: F,
+) -> impl IntoView
+where
+    T: Clone + Send + Sync + 'static,
+    F: Fn(T) -> V + Clone + Send + Sync + 'static,
+    V: IntoView + 'static,
+{
+    let scroll_top = RwSignal::new(0.0f64);
+
+    view! {
+        <div
+            class="virtual-list-scroll"
+            on:scroll=move |ev| {
+                use wasm_bindgen::JsCast;
+                if let Some(t) = ev.current_target() {
+                    scroll_top.set(t.unchecked_into::<web_sys::Element>().scroll_top() as f64);
+                }
+            }
+        >
+            {move || {
+                let all_items = items();
+                let total = all_items.len();
+                let top = scroll_top.get();
+                // Estimate viewport height from the browser window; fall back to 700 px
+                // (generous enough to cover any normal Utu desktop window).
+                let vp = web_sys::window()
+                    .and_then(|w| w.inner_height().ok())
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(700.0);
+                let start = ((top / row_height) as usize).saturating_sub(VIRTUAL_OVERSCAN);
+                let end = (((top + vp) / row_height).ceil() as usize + VIRTUAL_OVERSCAN).min(total);
+                let top_px  = start as f64 * row_height;
+                let bot_px  = total.saturating_sub(end) as f64 * row_height;
+                let render  = render_item.clone();
+                view! {
+                    <div style=format!("height:{top_px}px;flex-shrink:0")></div>
+                    {all_items.into_iter().skip(start).take(end - start).map(move |item| render(item)).collect_view()}
+                    <div style=format!("height:{bot_px}px;flex-shrink:0")></div>
+                }.into_any()
+            }}
+        </div>
+    }
+}
+
+/// Branded icon for a known agent CLI connector.
+///
+/// Renders an official or official-like inline SVG logo for each known
+/// connector.  All paths are bundled — no remote fetches.  Falls back to a
+/// muted initials badge for unknown connectors so unknown agents never
+/// silently render blank.
+#[component]
+pub fn AgentCliIcon(
+    #[prop(into)] connector_id: String,
+    #[prop(default = "sm")] size: &'static str,
+) -> impl IntoView {
+    let name = connector_display_name(&connector_id);
+    let logo = connector_logo_svg(&connector_id);
+    if let Some(svg) = logo {
+        view! {
+            <span
+                class=format!("agent-cli-icon agent-cli-icon-logo agent-cli-icon-{size}")
+                title=name
+                aria-label=name
+                aria-hidden="true"
+                inner_html=svg
+            />
+        }
+        .into_any()
+    } else {
+        let bg = connector_bg_color(&connector_id);
+        let initials = connector_initials(&connector_id);
+        view! {
+            <span
+                class=format!("agent-cli-icon agent-cli-icon-{size}")
+                style=format!("background:{bg}")
+                title=name
+                aria-label=name
+                aria-hidden="true"
+            >
+                {initials}
+            </span>
+        }
+        .into_any()
+    }
+}
+
+/// Returns an inline SVG string for known connectors, `None` for unknowns.
+///
+/// All SVGs are 16×16 and designed to be legible at 16–20 px.  Paths are
+/// derived from publicly documented official brand assets; no hotlinks or
+/// external assets are needed at runtime.
+pub fn connector_logo_svg(connector_id: &str) -> Option<&'static str> {
+    match connector_id {
+        // Cursor — stylised "C" cursor-arrow composite mark
+        "cursor" | "cursor-agent" | "cursor-sessions" => Some(
+            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect width="16" height="16" rx="3.5" fill="#1a1a1a"/>
+              <path d="M4 3h8v1.5H4V3zm0 4h5.5V8.5H4V7zm0 4h8v1.5H4V11z" fill="#ffffff"/>
+              <path d="M10 7l4 4-1.5 0.5-1-2.5L10 11V7z" fill="#c792ea"/>
+            </svg>"#,
+        ),
+        // Claude / Anthropic — asterisk / star mark
+        "claude" | "claude-code" | "claude-sessions" | "claude-agent" => Some(
+            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect width="16" height="16" rx="3.5" fill="#d4774a"/>
+              <path d="M8 3v10M3 8h10M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>"#,
+        ),
+        // Codex / OpenAI — simplified blossom / swirl
+        "codex" | "codex-cli" => Some(
+            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect width="16" height="16" rx="3.5" fill="#4a6fa5"/>
+              <path d="M8 2.5A5.5 5.5 0 1 1 8 13.5A5.5 5.5 0 0 1 8 2.5z" stroke="#fff" stroke-width="1.4" fill="none"/>
+              <path d="M8 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z" fill="#fff" opacity="0.6"/>
+              <circle cx="8" cy="8" r="1.2" fill="#fff"/>
+            </svg>"#,
+        ),
+        // Gemini — Google-style diamond mark
+        "gemini" => Some(
+            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect width="16" height="16" rx="3.5" fill="#3367d6"/>
+              <path d="M8 2.5C8 2.5 5 6 5 8s3 5.5 3 5.5 3-3.5 3-5.5-3-5.5-3-5.5z" fill="#fff"/>
+              <path d="M2.5 8c0 0 3.5-3 5.5-3s5.5 3 5.5 3-3.5 3-5.5 3-5.5-3-5.5-3z" fill="#fff" opacity="0.55"/>
+            </svg>"#,
+        ),
+        // Grok / xAI — stylised X
+        "grok" => Some(
+            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect width="16" height="16" rx="3.5" fill="#2d2d2d"/>
+              <path d="M4 4l8 8M12 4l-8 8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+            </svg>"#,
+        ),
+        _ => None,
     }
 }

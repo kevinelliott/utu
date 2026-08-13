@@ -86,6 +86,7 @@ fn populate_dependencies(store: &Store) {
             state: AgentState::Running,
             started_at_unix_ms: 4,
             last_observed_at_unix_ms: Some(5),
+            title_hint: None,
         })
         .unwrap();
 }
@@ -122,6 +123,7 @@ fn populate_second_scope(store: &Store) {
             state: AgentState::Running,
             started_at_unix_ms: 23,
             last_observed_at_unix_ms: Some(24),
+            title_hint: None,
         })
         .unwrap();
 }
@@ -588,6 +590,7 @@ fn cross_scope_references_and_parent_mutations_are_rejected_atomically() {
         state: AgentState::Running,
         started_at_unix_ms: 30,
         last_observed_at_unix_ms: None,
+        title_hint: None,
     };
     assert!(store.upsert_session(&invalid_session).is_err());
     assert!(store.get_session("cross-session").unwrap().is_none());

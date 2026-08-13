@@ -2,16 +2,19 @@ use leptos::{prelude::*, task::spawn_local};
 
 use crate::{
     components::{
-        AgentAvatar, AppMarkGlyph, DemoBadge, ICON_ATTENTION, ICON_CLOSE, ICON_COMMAND, ICON_COST,
-        ICON_FOLDER, ICON_HOME, ICON_NODES, ICON_PLUG, ICON_PLUS, ICON_SEARCH, ICON_SETTINGS, Icon,
-        StatusDot, WorkspaceNav,
+        AgentAvatar, AgentCliIcon, AppMarkGlyph, DemoBadge, ICON_ATTENTION, ICON_CLOSE,
+        ICON_COMMAND, ICON_COST, ICON_FOLDER, ICON_HOME, ICON_NODES, ICON_ORBIT, ICON_PLUG,
+        ICON_PLUS, ICON_SEARCH, ICON_SETTINGS, Icon, StatusDot,
     },
     ipc,
     views::{
         attention::{AttentionInspector, AttentionView},
+        costs::CostsView,
         fleet::{FleetInspector, FleetView},
         integrations::{IntegrationsInspector, IntegrationsView, LiveIntegrationsInspector},
+        overview::LiveOverviewView,
         projects::{ProjectInspector, ProjectsView},
+        settings::SettingsView,
         workspace::{LiveWorkspaceInspector, LiveWorkspaceView, WorkspaceInspector, WorkspaceView},
     },
     workspace_data::{
@@ -25,20 +28,26 @@ use crate::{
 pub enum AppView {
     #[default]
     Workspace,
+    Overview,
     Attention,
     Projects,
     Fleet,
     Integrations,
+    Settings,
+    Costs,
 }
 
 impl AppView {
     const fn label(self) -> &'static str {
         match self {
             Self::Workspace => "Workspace",
+            Self::Overview => "Overview",
             Self::Attention => "Attention",
             Self::Projects => "Projects",
             Self::Fleet => "Fleet",
             Self::Integrations => "Integrations",
+            Self::Settings => "Settings",
+            Self::Costs => "Costs",
         }
     }
 
@@ -48,10 +57,13 @@ impl AppView {
         }
         match self {
             Self::Workspace => "Projects and sessions",
+            Self::Overview => "Active agent sessions",
             Self::Attention => "Decisions and problems",
             Self::Projects => "Work across outcomes",
             Self::Fleet => "Running agent sessions",
             Self::Integrations => "Connectors and capabilities",
+            Self::Settings => "Local owner configuration",
+            Self::Costs => "Token spend by project",
         }
     }
 
@@ -66,7 +78,7 @@ impl AppView {
 #[component]
 pub fn App() -> impl IntoView {
     let active_view = RwSignal::new(AppView::Workspace);
-    let inspector_open = RwSignal::new(true);
+    let inspector_open = RwSignal::new(false);
     let context_open = RwSignal::new(false);
     let notice = RwSignal::new(None::<String>);
     let project_creator_open = RwSignal::new(false);
@@ -240,7 +252,6 @@ pub fn App() -> impl IntoView {
             <header class="native-titlebar" data-tauri-drag-region="">
                 <div class="titlebar-leading" data-tauri-drag-region="">
                     <span class="titlebar-product" data-tauri-drag-region="">"Utu"</span>
-                    <span class="titlebar-owner" data-tauri-drag-region="">"Local owner"</span>
                 </div>
                 <span class="titlebar-view" data-tauri-drag-region="">{move || {
                     if active_view.get() == AppView::Workspace {
@@ -250,9 +261,8 @@ pub fn App() -> impl IntoView {
                     }
                 }}</span>
                 <Show when=move || live.is_desktop() fallback=move || view! { <DemoBadge web=true /> }>
-                    <span class=move || format!("demo-badge live-runtime runtime-{:?}", live.phase.get()).to_lowercase()>
-                        <span class=move || format!("status-dot status-{}", live_phase_tone(live.phase.get())) aria-hidden="true"></span>
-                        {move || live.phase.get().label()}
+                    <span class="titlebar-agent-status" title=move || titlebar_status_label(&live)>
+                        <span class=move || format!("status-dot status-{}", agent_system_tone(&live)) aria-hidden="true"></span>
                     </span>
                 </Show>
             </header>
@@ -280,6 +290,11 @@ pub fn App() -> impl IntoView {
                             <LiveWorkspaceView inspector_open on_review_evidence=Callback::new(move |_| active_view.set(AppView::Integrations)) />
                         </Show>
                     </Show>
+                    <Show when=move || active_view.get() == AppView::Overview>
+                        <Show when=move || live.is_desktop() fallback=move || view! { <div class="overview-surface"><div class="overview-state"><span class="status-dot status-attention" aria-hidden="true"></span><p>"Overview requires the native owner app."</p></div></div> }>
+                            <LiveOverviewView />
+                        </Show>
+                    </Show>
                     <Show when=move || active_view.get() == AppView::Attention>
                         <Show when=move || live.is_desktop() fallback=move || view! { <AttentionView inspector_open read_only notice /> }>
                             <LiveCollectionView kind="attention" inspector_open />
@@ -297,6 +312,12 @@ pub fn App() -> impl IntoView {
                     </Show>
                     <Show when=move || active_view.get() == AppView::Integrations>
                         <IntegrationsView inspector_open read_only notice />
+                    </Show>
+                    <Show when=move || active_view.get() == AppView::Settings>
+                        <SettingsView />
+                    </Show>
+                    <Show when=move || active_view.get() == AppView::Costs>
+                        <CostsView />
                     </Show>
                 </section>
 
@@ -326,6 +347,15 @@ pub fn App() -> impl IntoView {
                             <Show when=move || live.is_desktop() fallback=move || view! { <IntegrationsInspector inspector_open read_only notice /> }>
                                 <LiveIntegrationsInspector inspector_open />
                             </Show>
+                        </Show>
+                        <Show when=move || matches!(active_view.get(), AppView::Overview | AppView::Settings | AppView::Costs)>
+                            <div class="inspector-content">
+                                <header class="inspector-header simple-inspector-header">
+                                    <div><h2>{move || active_view.get().label()}</h2><p>"Details"</p></div>
+                                    <button class="icon-button" type="button" aria-label="Close details" on:click=move |_| inspector_open.set(false)><Icon path=ICON_CLOSE /></button>
+                                </header>
+                                <section class="inspector-section"><p class="inspector-note">{move || active_view.get().subtitle(read_only)}</p></section>
+                            </div>
                         </Show>
                     </aside>
                 </Show>
@@ -701,7 +731,7 @@ fn LiveCollectionView(kind: &'static str, inspector_open: RwSignal<bool>) -> imp
     view! {
         <div class="workspace-layout live-collection-layout">
             <header class="workspace-toolbar">
-                <div class="toolbar-leading"><WorkspaceNav /><div><h1>{title}</h1><p>{subtitle}</p></div></div>
+                <div class="toolbar-leading"><div><h1>{title}</h1><p>{subtitle}</p></div></div>
                 <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)>"Details"</button>
             </header>
             <div class="truth-banner live-truth-banner" role="note">
@@ -737,7 +767,7 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
     view! {
         <div class="workspace-layout live-collection-layout live-projects-layout">
             <header class="workspace-toolbar">
-                <div class="toolbar-leading"><WorkspaceNav /><div><h1>"Projects"</h1><p>"Select a project to list its agent sessions"</p></div></div>
+                <div class="toolbar-leading"><div><h1>"Projects"</h1><p>"Select a project to list its agent sessions"</p></div></div>
                 <div class="toolbar-actions">
                     <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)>"Details"</button>
                     <button
@@ -896,17 +926,33 @@ fn LiveFleetView(inspector_open: RwSignal<bool>) -> impl IntoView {
     let actions = expect_context::<WorkspaceActionSink>();
     let active_view = expect_context::<RwSignal<AppView>>();
 
+    // Flat pre-sorted item list — only recomputed when snapshot changes, not on scroll.
+    let fleet_items = Signal::derive(move || {
+        live.snapshot.get().map(|s| build_fleet_items(&s)).unwrap_or_default()
+    });
+
+    // Tracks scroll position of the `.live-collection-content` div.
+    let scroll_top = RwSignal::new(0.0f64);
+
     view! {
         <div class="workspace-layout live-collection-layout">
             <header class="workspace-toolbar">
-                <div class="toolbar-leading"><WorkspaceNav /><div><h1>"Fleet"</h1><p>{move || fleet_subtitle(&live)}</p></div></div>
+                <div class="toolbar-leading"><div><h1>"Fleet"</h1><p>{move || fleet_subtitle(&live)}</p></div></div>
                 <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)>"Details"</button>
             </header>
             <div class="truth-banner live-truth-banner" role="note">
                 <Icon path=ICON_ATTENTION />
                 <span><strong>"Observed agent sessions"</strong>"Every stored session is listed. Running sessions stay at the top; idle history remains visible."</span>
             </div>
-            <div class="live-collection-content">
+            <div
+                class="live-collection-content"
+                on:scroll=move |ev| {
+                    use wasm_bindgen::JsCast;
+                    if let Some(t) = ev.current_target() {
+                        scroll_top.set(t.unchecked_into::<web_sys::Element>().scroll_top() as f64);
+                    }
+                }
+            >
                 <Show when=move || live.phase.get() == LoadPhase::Loading>
                     <div class="live-collection-empty"><span class="spinner"></span><strong>"Loading agent sessions"</strong><small>"Waiting for the native workspace snapshot."</small></div>
                 </Show>
@@ -916,26 +962,48 @@ fn LiveFleetView(inspector_open: RwSignal<bool>) -> impl IntoView {
                 <Show when=move || matches!(live.phase.get(), LoadPhase::Empty | LoadPhase::Ready) && live.snapshot.get().is_some_and(|snapshot| snapshot.sessions.is_empty())>
                     <div class="live-collection-empty"><span class="live-workspace-glyph"><Icon path=ICON_NODES /></span><strong>"No agent sessions yet"</strong><small>"Sync for All on Integrations imports Claude Code and Codex session metadata."</small></div>
                 </Show>
-                <div class="live-record-list">
-                    {move || live.snapshot.get().map(|snapshot| {
-                        fleet_session_groups(&snapshot.sessions).into_iter().map(|(label, tone, sessions)| {
-                            let count = sessions.len();
-                            view! {
-                                <section class="live-fleet-group">
-                                    <header class="live-fleet-group-header">
-                                        <span class=format!("state-label {tone}")>{label}</span>
-                                        <small>{count}</small>
-                                    </header>
-                                    {sessions.into_iter().map(|session| {
-                                        let session_id = session.id.clone();
-                                        let selected_id = session_id.clone();
-                                        let title = session_title(&snapshot, &session);
-                                        let detail = session_detail(&snapshot, &session, true);
-                                        let state = session.state.clone();
-                                        let row_tone = session_state_tone(&session.state);
+                // Virtual list rendered directly inside the scroll container.
+                {move || {
+                    let items = fleet_items.get();
+                    let total = items.len();
+                    if total == 0 {
+                        return view! { <></> }.into_any();
+                    }
+                    const ROW_H: f64 = 60.0;
+                    const OVERSCAN: usize = 6;
+                    let top = scroll_top.get();
+                    let vp = web_sys::window()
+                        .and_then(|w| w.inner_height().ok())
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(700.0);
+                    let start = ((top / ROW_H) as usize).saturating_sub(OVERSCAN);
+                    let end   = (((top + vp) / ROW_H).ceil() as usize + OVERSCAN).min(total);
+                    let top_px = start as f64 * ROW_H;
+                    let bot_px = total.saturating_sub(end) as f64 * ROW_H;
+                    view! {
+                        <div class="live-record-list">
+                            <div style=format!("height:{top_px}px;flex-shrink:0")></div>
+                            {items.into_iter().skip(start).take(end - start).map(|item| {
+                                match item {
+                                    FleetItem::GroupHeader { label, tone, count } => view! {
+                                        <div class="live-fleet-group-header">
+                                            <span class=format!("state-label {tone}")>{label}</span>
+                                            <small>{count}</small>
+                                        </div>
+                                    }.into_any(),
+                                    FleetItem::RunningEmpty => view! {
+                                        <div class="live-task-empty"><span>"No agents are running right now"</span></div>
+                                    }.into_any(),
+                                    FleetItem::Session { id, title, detail, state, row_tone, connector_id } => {
+                                        let session_id = id.clone();
+                                        let selected_id = id.clone();
                                         view! {
                                             <button
-                                                class=move || if live.selected_session_id.get().as_deref() == Some(selected_id.as_str()) { "live-record-row live-session-row is-selected" } else { "live-record-row live-session-row" }
+                                                class=move || if live.selected_session_id.get().as_deref() == Some(selected_id.as_str()) {
+                                                    "live-record-row live-session-row is-selected"
+                                                } else {
+                                                    "live-record-row live-session-row"
+                                                }
                                                 type="button"
                                                 on:click=move |_| {
                                                     actions.dispatch(WorkspaceAction::SelectSession(session_id.clone()));
@@ -943,20 +1011,20 @@ fn LiveFleetView(inspector_open: RwSignal<bool>) -> impl IntoView {
                                                     active_view.set(AppView::Workspace);
                                                 }
                                             >
-                                                <span class="live-record-mark"><StatusDot tone=row_tone /></span>
+                                                <span class="live-record-mark">
+                                                    <AgentCliIcon connector_id=connector_id.unwrap_or_default() size="sm" />
+                                                </span>
                                                 <span><strong>{title}</strong><small>{detail}</small></span>
                                                 <span class=move || format!("state-label {row_tone}")>{state}</span>
                                             </button>
-                                        }
-                                    }).collect_view()}
-                                    <Show when=move || count == 0 && label == "Running">
-                                        <div class="live-task-empty"><span>"No agents are running right now"</span></div>
-                                    </Show>
-                                </section>
-                            }
-                        }).collect_view()
-                    })}
-                </div>
+                                        }.into_any()
+                                    },
+                                }
+                            }).collect_view()}
+                            <div style=format!("height:{bot_px}px;flex-shrink:0")></div>
+                        </div>
+                    }.into_any()
+                }}
             </div>
         </div>
     }
@@ -1030,6 +1098,56 @@ fn fleet_session_rank(state: &str) -> u8 {
         "idle" => 3,
         _ => 4,
     }
+}
+
+// Flat list item for the virtual Fleet view.
+#[derive(Clone)]
+enum FleetItem {
+    GroupHeader {
+        label: &'static str,
+        tone: &'static str,
+        count: usize,
+    },
+    RunningEmpty,
+    Session {
+        id: String,
+        title: String,
+        detail: String,
+        state: String,
+        row_tone: &'static str,
+        connector_id: Option<String>,
+    },
+}
+
+fn build_fleet_items(snapshot: &crate::ipc::WorkspaceSnapshot) -> Vec<FleetItem> {
+    let mut sessions = snapshot.sessions.clone();
+    sort_sessions_for_display(&mut sessions);
+    let groups = fleet_session_groups(&sessions);
+    let mut items = Vec::new();
+    for (label, tone, group_sessions) in groups {
+        let count = group_sessions.len();
+        items.push(FleetItem::GroupHeader { label, tone, count });
+        if label == "Running" && group_sessions.is_empty() {
+            items.push(FleetItem::RunningEmpty);
+        } else {
+            for s in group_sessions {
+                let connector_id = snapshot
+                    .agents
+                    .iter()
+                    .find(|a| a.id == s.agent_id)
+                    .map(|a| a.connector_id.clone());
+                items.push(FleetItem::Session {
+                    id: s.id.clone(),
+                    title: session_title(snapshot, &s),
+                    detail: session_detail(snapshot, &s, false),
+                    state: s.state.clone(),
+                    row_tone: session_state_tone(&s.state),
+                    connector_id,
+                });
+            }
+        }
+    }
+    items
 }
 
 #[component]
@@ -1260,28 +1378,39 @@ fn live_collection_rows(live: &LiveStatus, kind: &str) -> Vec<(String, String, S
 #[component]
 fn UtilityRail(active_view: RwSignal<AppView>, context_open: RwSignal<bool>) -> impl IntoView {
     let actions = expect_context::<WorkspaceActionSink>();
-    let workspace_actions = actions;
-    let home_actions = actions;
-    let attention_actions = actions;
-    let project_actions = actions;
-    let fleet_actions = actions;
-    let integration_actions = actions;
+    let live = expect_context::<LiveStatus>();
     view! {
         <nav class="utility-rail" aria-label="Application">
             <div class="utility-primary">
-                <button class="app-mark" type="button" aria-label="Utu home" on:click=move |_| { active_view.set(AppView::Workspace); home_actions.dispatch(WorkspaceAction::SelectView("workspace")); }>
+                <button class="app-mark" type="button" aria-label="Utu home" on:click=move |_| { active_view.set(AppView::Workspace); actions.dispatch(WorkspaceAction::SelectView("workspace")); }>
                     <AppMarkGlyph />
                 </button>
-                <button class=move || rail_class(active_view.get() == AppView::Workspace) type="button" aria-label="Workspace" title="Workspace" on:click=move |_| { active_view.set(AppView::Workspace); context_open.set(false); workspace_actions.dispatch(WorkspaceAction::SelectView("workspace")); }><Icon path=ICON_HOME /></button>
-                <button class=move || rail_class(active_view.get() == AppView::Attention) type="button" aria-label="Attention" title="Attention" on:click=move |_| { active_view.set(AppView::Attention); context_open.set(false); attention_actions.dispatch(WorkspaceAction::SelectView("attention")); }><Icon path=ICON_ATTENTION /><span class="rail-alert"></span></button>
-                <button class=move || rail_class(active_view.get() == AppView::Projects) type="button" aria-label="Projects" title="Projects" on:click=move |_| { active_view.set(AppView::Projects); context_open.set(false); project_actions.dispatch(WorkspaceAction::SelectView("projects")); }><Icon path=ICON_FOLDER /></button>
-                <button class=move || rail_class(active_view.get() == AppView::Fleet) type="button" aria-label="Fleet" title="Fleet" on:click=move |_| { active_view.set(AppView::Fleet); context_open.set(false); fleet_actions.dispatch(WorkspaceAction::SelectView("fleet")); }><Icon path=ICON_NODES /></button>
-                <button class=move || rail_class(active_view.get() == AppView::Integrations) type="button" aria-label="Integrations" title="Integrations" on:click=move |_| { active_view.set(AppView::Integrations); context_open.set(false); integration_actions.dispatch(WorkspaceAction::SelectView("integrations")); }><Icon path=ICON_PLUG /><span class="rail-alert rail-alert-soft"></span></button>
+                <button
+                    class=move || rail_class(active_view.get() == AppView::Overview)
+                    type="button"
+                    aria-label="Overview"
+                    title="Overview"
+                    on:click=move |_| { active_view.set(AppView::Overview); context_open.set(false); }
+                >
+                    <Icon path=ICON_ORBIT />
+                    {move || {
+                        let running = live.snapshot.get().map(|s| s.sessions.iter().filter(|ses| ses.state == "running" || ses.state == "waiting").count()).unwrap_or(0);
+                        if running > 0 {
+                            view! { <span class="rail-badge">{running}</span> }.into_any()
+                        } else {
+                            view! {}.into_any()
+                        }
+                    }}
+                </button>
+                <button class=move || rail_class(active_view.get() == AppView::Workspace) type="button" aria-label="Workspace" title="Workspace" on:click=move |_| { active_view.set(AppView::Workspace); context_open.set(false); actions.dispatch(WorkspaceAction::SelectView("workspace")); }><Icon path=ICON_HOME /></button>
+                <button class=move || rail_class(active_view.get() == AppView::Attention) type="button" aria-label="Attention" title="Attention" on:click=move |_| { active_view.set(AppView::Attention); context_open.set(false); actions.dispatch(WorkspaceAction::SelectView("attention")); }><Icon path=ICON_ATTENTION /><span class="rail-alert"></span></button>
+                <button class=move || rail_class(active_view.get() == AppView::Fleet) type="button" aria-label="Fleet" title="Fleet" on:click=move |_| { active_view.set(AppView::Fleet); context_open.set(false); actions.dispatch(WorkspaceAction::SelectView("fleet")); }><Icon path=ICON_NODES /></button>
+                <button class=move || rail_class(active_view.get() == AppView::Integrations) type="button" aria-label="Integrations" title="Integrations" on:click=move |_| { active_view.set(AppView::Integrations); context_open.set(false); actions.dispatch(WorkspaceAction::SelectView("integrations")); }><Icon path=ICON_PLUG /><span class="rail-alert rail-alert-soft"></span></button>
                 <button class="rail-button compact-planned-action" type="button" disabled=true aria-label="Search · planned" title="Search is not wired yet"><Icon path=ICON_SEARCH /></button>
             </div>
             <div class="utility-secondary">
-                <button class="rail-button" type="button" disabled=true aria-label="Costs · planned" title="Costs view is not wired yet"><Icon path=ICON_COST /></button>
-                <button class="rail-button" type="button" disabled=true aria-label="Settings · planned" title="Settings are not wired yet"><Icon path=ICON_SETTINGS /></button>
+                <button class=move || rail_class(active_view.get() == AppView::Costs) type="button" aria-label="Costs" title="Costs" on:click=move |_| { active_view.set(AppView::Costs); context_open.set(false); }><Icon path=ICON_COST /></button>
+                <button class=move || rail_class(active_view.get() == AppView::Settings) type="button" aria-label="Settings" title="Settings" on:click=move |_| { active_view.set(AppView::Settings); context_open.set(false); }><Icon path=ICON_SETTINGS /></button>
                 <button class="owner-avatar" type="button" aria-label="Owner profile">"K"<StatusDot /></button>
             </div>
         </nav>
@@ -1304,6 +1433,9 @@ fn ContextRail(active_view: RwSignal<AppView>, read_only: bool) -> impl IntoView
                 <Show when=move || active_view.get() == AppView::Workspace>
                     <WorkspaceContext read_only />
                 </Show>
+                <Show when=move || active_view.get() == AppView::Overview>
+                    <OverviewContext />
+                </Show>
                 <Show when=move || active_view.get() == AppView::Attention>
                     <Show when=move || live.is_desktop() fallback=AttentionContext>
                         <LiveCollectionContext kind="attention" />
@@ -1321,6 +1453,12 @@ fn ContextRail(active_view: RwSignal<AppView>, read_only: bool) -> impl IntoView
                 </Show>
                 <Show when=move || active_view.get() == AppView::Integrations>
                     <IntegrationsContext />
+                </Show>
+                <Show when=move || matches!(active_view.get(), AppView::Settings | AppView::Costs)>
+                    <div class="context-section">
+                        <div class="section-label"><span>{move || active_view.get().label()}</span></div>
+                        <div class="context-empty"><p>{move || active_view.get().subtitle(read_only)}</p></div>
+                    </div>
                 </Show>
             </div>
             <div class="context-footer">
@@ -1379,51 +1517,27 @@ fn WorkspaceContext(read_only: bool) -> impl IntoView {
             }).collect_view()}
             </Show>
         </div>
-        <div class="context-section session-context">
-            <div class="section-label"><span>"Sessions"</span><span class="count">{move || {
-                let selected = live.selected_project_id.get();
-                live.snapshot.get().map(|snapshot| {
-                    snapshot.sessions.iter().filter(|session| selected.as_deref() == Some(session.project_id.as_str())).count()
-                }).unwrap_or_default()
-            }}</span></div>
-            <Show when=move || live.snapshot.get().is_some()>
-                {move || live.snapshot.get().map(|snapshot| {
-                    let selected_project = live.selected_project_id.get();
-                    let mut sessions = snapshot.sessions.iter().filter(|session| selected_project.as_deref() == Some(session.project_id.as_str())).cloned().collect::<Vec<_>>();
-                    sort_sessions_for_display(&mut sessions);
-                    if sessions.is_empty() {
-                        return view! { <div class="context-empty"><p>"No sessions"</p><span>"Sync this project to import Claude Code and Codex metadata."</span></div> }.into_any();
-                    }
-                    sessions.into_iter().map(|session| {
-                    let session_id = session.id.clone();
-                    let session_id_action = session_id.clone();
-                    let title = session_title(&snapshot, &session);
-                    let detail = session_detail(&snapshot, &session, false);
-                    let tone = session_state_tone(&session.state);
+        // Sessions are shown in the workspace sessions pane (middle column) on the live desktop
+        // path. Keep the demo-mode section for the read-only web fallback.
+        <Show when=move || !live.is_desktop()>
+            <div class="context-section session-context">
+                <div class="section-label"><span>"Sessions"</span></div>
+                {model.sessions.iter().copied().map(|session| {
                     view! {
-                        <button class=move || if live.selected_session_id.get().as_deref() == Some(session_id.as_str()) { "session-context-row is-selected" } else { "session-context-row" } type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SelectSession(session_id_action.clone()))>
-                            <span class="session-state"><StatusDot tone /></span><span><strong>{title}</strong><small>{detail}" · "{session.state.clone()}</small></span>
+                        <button
+                            class=if session.id == model.active_session { "session-context-row is-selected" } else { "session-context-row" }
+                            type="button"
+                            on:click=move |_| actions.dispatch(WorkspaceAction::SelectSession(session.id.into()))
+                        >
+                            <span class="session-state"><StatusDot tone=session.tone /></span>
+                            <span><strong>{session.title}</strong><small>{session.agents}" · "{session.freshness}</small></span>
+                            {session.unread.map(|unread| view! { <span class="unread-mark">{unread}</span> })}
                         </button>
                     }
-                }).collect_view().into_any()})}
-            </Show>
-            <Show when=move || !live.is_desktop()>
-            {model.sessions.iter().copied().map(|session| {
-                view! {
-                    <button
-                        class=if session.id == model.active_session { "session-context-row is-selected" } else { "session-context-row" }
-                        type="button"
-                        on:click=move |_| actions.dispatch(WorkspaceAction::SelectSession(session.id.into()))
-                    >
-                        <span class="session-state"><StatusDot tone=session.tone /></span>
-                        <span><strong>{session.title}</strong><small>{session.agents}" · "{session.freshness}</small></span>
-                        {session.unread.map(|unread| view! { <span class="unread-mark">{unread}</span> })}
-                    </button>
-                }
-            }).collect_view()}
-            </Show>
-        </div>
-        <div class="context-empty"><p>"No background jobs"</p><span>"New agent activity will appear here."</span></div>
+                }).collect_view()}
+            </div>
+            <div class="context-empty"><p>"No background jobs"</p><span>"New agent activity will appear here."</span></div>
+        </Show>
     }
 }
 
@@ -1433,22 +1547,82 @@ fn IntegrationsContext() -> impl IntoView {
     let actions = expect_context::<WorkspaceActionSink>();
     let live = expect_context::<LiveStatus>();
     view! {
+        // On live desktop, the main Integrations pane shows all CLI details —
+        // avoid duplicating that here. Just show a minimal summary count.
         <Show when=move || live.is_desktop() fallback=move || view! {
             <><div class="context-section"><div class="section-label"><span>"Local CLI"</span><span class="count">"4"</span></div>{model.connectors.iter().copied().filter(|connector| connector.family == "Local CLI").map(|connector| { view! { <button class=if connector.id == "codex-cli" { "integration-context-row is-selected" } else { "integration-context-row" } type="button" on:click=move |_| actions.dispatch(WorkspaceAction::ConfigureConnector(connector.id.into()))><StatusDot tone=connector.tone /><span><strong>{connector.name}</strong><small>"Demo · "{connector.status}</small></span></button> } }).collect_view()}</div><div class="context-section"><div class="section-label"><span>"Cloud"</span><span class="count">"3"</span></div>{model.connectors.iter().copied().filter(|connector| connector.family == "Cloud").map(|connector| { view! { <button class="integration-context-row" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::ConfigureConnector(connector.id.into()))><StatusDot tone=connector.tone /><span><strong>{connector.name}</strong><small>"Planned connector"</small></span></button> } }).collect_view()}</div></>
         }>
             <div class="context-section">
-                <div class="section-label"><span>"Observed CLIs"</span><span class="count">{move || live.diagnostics.get().map(|report| report.connectors.len()).unwrap_or_default()}</span></div>
-                {move || live.diagnostics.get().map(|report| report.connectors.iter().map(|connector| {
-                    let id = connector.descriptor.id.clone();
-                    let selected_id = id.clone();
-                    let name = connector.descriptor.display_name.clone();
-                    let detail = format!("{} · {}", connector.readiness, connector.auth.state);
-                    let tone = if connector.readiness == "ready" { "healthy" } else if connector.readiness == "unavailable" { "problem" } else { "attention" };
-                    view! { <button class=move || if live.selected_connector_id.get().as_deref() == Some(selected_id.as_str()) { "integration-context-row is-selected" } else { "integration-context-row" } type="button" on:click=move |_| actions.dispatch(WorkspaceAction::ConfigureConnector(id.clone()))><StatusDot tone /><span><strong>{name}</strong><small>{detail}</small></span></button> }
-                }).collect_view())}
-                <Show when=move || live.diagnostics.get().is_none()><div class="context-loading-state"><span class="spinner"></span><span>"Running local checks"</span></div></Show>
+                <div class="section-label">
+                    <span>"Observed"</span>
+                    <span class="count">
+                        {move || live.diagnostics.get().map(|r| r.connectors.len()).unwrap_or_default()}
+                    </span>
+                </div>
+                <Show when=move || live.diagnostics.get().is_none()>
+                    <div class="context-loading-state">
+                        <span class="spinner"></span><span>"Checking CLIs"</span>
+                    </div>
+                </Show>
+                {move || live.diagnostics.get().map(|report| {
+                    let ready = report.connectors.iter().filter(|c| c.readiness == "ready").count();
+                    let total = report.connectors.len();
+                    view! {
+                        <div class="integrations-context-summary">
+                            <span class="state-label healthy">{ready}" ready"</span>
+                            {if ready < total {
+                                view! { <span class="state-label attention">{total - ready}" need attention"</span> }.into_any()
+                            } else {
+                                view! {}.into_any()
+                            }}
+                        </div>
+                    }
+                })}
             </div>
         </Show>
+    }
+}
+
+#[component]
+fn OverviewContext() -> impl IntoView {
+    let live = expect_context::<LiveStatus>();
+    view! {
+        <div class="context-section">
+            <div class="section-label">
+                <span>"Active"</span>
+                <span class="count">
+                    {move || live.snapshot.get()
+                        .map(|s| s.sessions.iter().filter(|ses| matches!(ses.state.as_str(), "running" | "waiting")).count())
+                        .unwrap_or_default()}
+                </span>
+            </div>
+            {move || {
+                let snap = live.snapshot.get();
+                let sessions: Vec<_> = snap.as_ref().map(|s| {
+                    s.sessions.iter()
+                        .filter(|ses| matches!(ses.state.as_str(), "running" | "waiting" | "problem"))
+                        .cloned()
+                        .collect()
+                }).unwrap_or_default();
+                sessions.into_iter().map(|session| {
+                    let tone = session_state_tone(&session.state);
+                    let title = snap.as_ref().map(|s| session_title(s, &session)).unwrap_or_else(|| session.id.clone());
+                    let connector_id = snap.as_ref().and_then(|s| {
+                        s.agents.iter().find(|a| a.id == session.agent_id).map(|a| a.connector_id.clone())
+                    }).unwrap_or_else(|| session.agent_id.clone());
+                    view! {
+                        <div class="overview-context-row">
+                            <AgentCliIcon connector_id=connector_id size="sm" />
+                            <span><strong>{title}</strong></span>
+                            <span class=format!("state-label {tone}")>{session.state.clone()}</span>
+                        </div>
+                    }
+                }).collect_view()
+            }}
+            <Show when=move || live.snapshot.get().is_some_and(|s| s.sessions.iter().all(|ses| !matches!(ses.state.as_str(), "running" | "waiting" | "problem")))>
+                <div class="context-empty"><p>"No active sessions"</p></div>
+            </Show>
+        </div>
     }
 }
 
@@ -1639,5 +1813,36 @@ fn rail_class(active: bool) -> &'static str {
         "rail-button is-active"
     } else {
         "rail-button"
+    }
+}
+
+fn agent_system_tone(live: &LiveStatus) -> &'static str {
+    let Some(snapshot) = live.snapshot.get() else {
+        return live_phase_tone(live.phase.get());
+    };
+    if snapshot.sessions.iter().any(|s| s.state == "waiting" || s.state == "problem") {
+        return "attention";
+    }
+    if snapshot.sessions.iter().any(|s| s.state == "running") {
+        return "healthy";
+    }
+    "quiet"
+}
+
+fn titlebar_status_label(live: &LiveStatus) -> String {
+    let Some(snapshot) = live.snapshot.get() else {
+        return live.phase.get().label().into();
+    };
+    let running = snapshot.sessions.iter().filter(|s| s.state == "running").count();
+    let waiting = snapshot.sessions.iter().filter(|s| s.state == "waiting").count();
+    let problem = snapshot.sessions.iter().filter(|s| s.state == "problem").count();
+    if problem > 0 {
+        format!("{problem} sessions need attention")
+    } else if waiting > 0 {
+        format!("{running} running · {waiting} waiting")
+    } else if running > 0 {
+        format!("{running} running")
+    } else {
+        "All agents idle".into()
     }
 }

@@ -2,7 +2,7 @@ use rusqlite::{Connection, TransactionBehavior};
 
 use crate::{Result, StoreError};
 
-pub(crate) const LATEST_SCHEMA_VERSION: u32 = 3;
+pub(crate) const LATEST_SCHEMA_VERSION: u32 = 4;
 
 const MIGRATIONS: &[(&str, &str)] = &[
     (
@@ -272,6 +272,12 @@ const MIGRATIONS: &[(&str, &str)] = &[
                 SELECT 1 FROM messages WHERE author_agent_id = OLD.id
             ) THEN RAISE(ABORT, 'authored message agents cannot be deleted') END;
         END;
+        "#,
+    ),
+    (
+        "session_title_hint",
+        r#"
+        ALTER TABLE sessions ADD COLUMN title_hint TEXT;
         "#,
     ),
 ];

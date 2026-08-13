@@ -663,6 +663,26 @@ impl LiveStatus {
             .any(|session| session.id == session_id)
             && snapshot.session_can_receive_direction(&session_id)
     }
+
+    /// Returns `true` when the selected session was imported from an external
+    /// agent's local files (has a `provider_session_id`) and is NOT eligible
+    /// for live provider delivery. Such sessions are observe-only: Utu may
+    /// read and display their transcripts but must not send directions to the
+    /// provider or interrupt the running session in any way.
+    pub fn selected_session_is_externally_observed(&self) -> bool {
+        let Some(snapshot) = self.snapshot.get() else {
+            return false;
+        };
+        let Some(session_id) = self.selected_session_id.get() else {
+            return false;
+        };
+        let has_provider_id = snapshot
+            .sessions
+            .iter()
+            .find(|s| s.id == session_id)
+            .is_some_and(|s| s.provider_session_id.is_some());
+        has_provider_id && !snapshot.session_can_receive_direction(&session_id)
+    }
 }
 
 fn format_sync_summary(summary: &SyncProjectSessionsSummary) -> String {
@@ -688,6 +708,7 @@ fn format_sync_summary(summary: &SyncProjectSessionsSummary) -> String {
 }
 
 pub fn session_title(snapshot: &WorkspaceSnapshot, session: &SessionRecord) -> String {
+    // 1. Task title — the most meaningful label when available.
     if let Some(title) = session.task_id.as_deref().and_then(|task_id| {
         snapshot
             .tasks
@@ -697,18 +718,15 @@ pub fn session_title(snapshot: &WorkspaceSnapshot, session: &SessionRecord) -> S
     }) {
         return title;
     }
-    let agent = snapshot
-        .agents
-        .iter()
-        .find(|agent| agent.id == session.agent_id)
-        .map(|agent| agent.display_name.as_str())
-        .unwrap_or("Agent");
-    match session.provider_session_id.as_deref() {
-        Some(provider_id) if !provider_id.is_empty() => {
-            format!("{agent} · {}", short_provider_id(provider_id))
-        }
-        _ => agent.to_owned(),
+    // 2. Title extracted from the first user message in the transcript.
+    if let Some(hint) = session.title_hint.as_deref().filter(|s| !s.is_empty()) {
+        return hint.to_owned();
     }
+    // 3. Short provider session identifier — never includes the agent CLI name.
+    if let Some(provider_id) = session.provider_session_id.as_deref().filter(|s| !s.is_empty()) {
+        return format!("Session {}", short_provider_id(provider_id));
+    }
+    "Untitled session".to_owned()
 }
 
 pub fn session_detail(
@@ -716,12 +734,6 @@ pub fn session_detail(
     session: &SessionRecord,
     include_project: bool,
 ) -> String {
-    let agent = snapshot
-        .agents
-        .iter()
-        .find(|agent| agent.id == session.agent_id)
-        .map(|agent| agent.display_name.as_str())
-        .unwrap_or("Unknown agent");
     let observed = relative_unix_ms(
         snapshot.generated_at_unix_ms,
         session.last_observed_at_unix_ms,
@@ -733,9 +745,9 @@ pub fn session_detail(
             .find(|project| project.id == session.project_id)
             .map(|project| project.name.as_str())
             .unwrap_or("Unknown project");
-        format!("{agent} · {project} · {observed}")
+        format!("{project} · {observed}")
     } else {
-        format!("{agent} · {observed}")
+        observed
     }
 }
 

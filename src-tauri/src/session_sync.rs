@@ -16,7 +16,8 @@ use utu_store::Store;
 use crate::{
     agent_sessions::{
         self, ObservedSession, SessionRoots, list_all_claude_sessions,
-        list_all_codex_file_sessions, list_claude_sessions, list_codex_file_sessions,
+        list_all_codex_file_sessions, list_all_cursor_sessions, list_claude_sessions,
+        list_codex_file_sessions,
     },
     clock::unix_ms,
     codex_commands::{
@@ -33,6 +34,11 @@ pub(crate) const CLAUDE_PROVIDER_ID: &str = "claude";
 pub(crate) const CLAUDE_DIAGNOSTIC_INTEGRATION_ID: &str = "claude";
 pub(crate) const CLAUDE_TRANSPORT_INTEGRATION_ID: &str = "claude-sessions";
 pub(crate) const CLAUDE_AGENT_ID: &str = "claude-code";
+
+pub(crate) const CURSOR_PROVIDER_ID: &str = "cursor";
+pub(crate) const CURSOR_DIAGNOSTIC_INTEGRATION_ID: &str = "cursor";
+pub(crate) const CURSOR_TRANSPORT_INTEGRATION_ID: &str = "cursor-sessions";
+pub(crate) const CURSOR_AGENT_ID: &str = "cursor-agent";
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -125,8 +131,15 @@ pub(crate) fn import_ready_agent_sessions(
     };
     let claude_by_root = list_all_claude_sessions(roots)?;
     let codex_by_root = list_all_codex_file_sessions(roots)?;
+    let cursor_by_root = list_all_cursor_sessions(roots)?;
     let projects = if discover_roots {
-        ensure_projects_for_roots(store, claude_by_root.keys().chain(codex_by_root.keys()))?;
+        ensure_projects_for_roots(
+            store,
+            claude_by_root
+                .keys()
+                .chain(codex_by_root.keys())
+                .chain(cursor_by_root.keys()),
+        )?;
         store
             .list_projects()
             .map_err(|error| error.to_string())?
@@ -254,6 +267,35 @@ pub(crate) fn import_ready_agent_sessions(
     }
 
     summary.agents = vec![codex, claude];
+
+    // Cursor Agent: file-based observation — no CLI probe required.
+    // Sessions are discovered from ~/.cursor/projects/<encoded>/agent-transcripts/.
+    let has_cursor_files = cursor_by_root.values().any(|v| !v.is_empty());
+    if has_cursor_files {
+        prepare_cursor_identity(store).unwrap_or(());
+        let mut cursor_imported = 0u32;
+        for project in &projects {
+            if let Ok(n) = persist_observed_for_project(
+                store,
+                project,
+                CURSOR_AGENT_ID,
+                "cursor-session",
+                &cursor_by_root,
+            ) {
+                cursor_imported = cursor_imported.saturating_add(n);
+            }
+        }
+        activate_cursor_observation(store).unwrap_or(());
+        summary.imported_sessions = summary.imported_sessions.saturating_add(cursor_imported);
+        summary.agents.push(AgentSyncSummary {
+            agent_id: CURSOR_AGENT_ID.into(),
+            display_name: "Cursor Agent".into(),
+            status: "synced".into(),
+            imported_sessions: cursor_imported,
+            detail: None,
+        });
+    }
+
     Ok(summary)
 }
 
@@ -433,6 +475,7 @@ fn persist_observed_sessions(
                 .map(|session| session.started_at_unix_ms)
                 .unwrap_or(observed.started_at_unix_ms),
             last_observed_at_unix_ms: Some(observed.last_observed_at_unix_ms),
+            title_hint: observed.title_hint.clone(),
         };
         store
             .upsert_session(&session)
@@ -485,6 +528,42 @@ fn deactivate_claude_observation(store: &Store) -> Result<(), String> {
         CLAUDE_TRANSPORT_INTEGRATION_ID,
         "Claude Code session files are not being observed.",
     )
+}
+
+fn prepare_cursor_identity(store: &Store) -> Result<(), String> {
+    ensure_observation_identity(
+        store,
+        CURSOR_PROVIDER_ID,
+        "Cursor Agent",
+        CURSOR_TRANSPORT_INTEGRATION_ID,
+        "Cursor Agent sessions",
+        CURSOR_AGENT_ID,
+        "Project-scoped Cursor Agent metadata observation is not complete.",
+    )
+}
+
+fn activate_cursor_observation(store: &Store) -> Result<(), String> {
+    let capabilities = observation_capabilities();
+    store
+        .activate_integration_agent(
+            &observation_integration(
+                CURSOR_TRANSPORT_INTEGRATION_ID,
+                CURSOR_PROVIDER_ID,
+                "Cursor Agent sessions",
+                IntegrationState::Ready,
+                None,
+                capabilities,
+            ),
+            &Agent {
+                id: CURSOR_AGENT_ID.into(),
+                provider_id: CURSOR_PROVIDER_ID.into(),
+                connector_id: CURSOR_TRANSPORT_INTEGRATION_ID.into(),
+                display_name: "Cursor Agent".into(),
+                model: None,
+                capabilities,
+            },
+        )
+        .map_err(|error| error.to_string())
 }
 
 fn prepare_codex_observation(store: &Store) -> Result<(), String> {

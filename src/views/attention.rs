@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use crate::components::{
     AgentAvatar, Composer, EmptyInspectorButton, EvidenceTag, ICON_CHECK, ICON_CLOSE, ICON_FILE,
     ICON_FILTER, ICON_MORE, ICON_PAUSE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP, Icon,
-    StatusDot, WorkspaceNav,
+    StatusDot,
 };
 
 #[component]
@@ -16,7 +16,6 @@ pub fn AttentionView(
         <div class="workspace-layout attention-layout">
             <header class="workspace-toolbar">
                 <div class="toolbar-leading">
-                    <WorkspaceNav />
                     <div>
                         <h1>"Needs your attention"</h1>
                         <p>"Decisions and problems across active work"</p>

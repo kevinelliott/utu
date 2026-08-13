@@ -129,6 +129,7 @@ impl Store {
             state: AgentState::Running,
             started_at_unix_ms: observed_at - 45_000,
             last_observed_at_unix_ms: Some(observed_at),
+            title_hint: None,
         })?;
 
         self.append_message(NewMessage {

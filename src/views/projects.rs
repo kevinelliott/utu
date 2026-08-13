@@ -2,7 +2,7 @@ use leptos::prelude::*;
 
 use crate::components::{
     AgentAvatar, Composer, EmptyInspectorButton, ICON_CHECK, ICON_CLOSE, ICON_FILE, ICON_MORE,
-    ICON_PAUSE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP, Icon, StatusDot, WorkspaceNav,
+    ICON_PAUSE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP, Icon, StatusDot,
 };
 
 #[component]
@@ -15,7 +15,6 @@ pub fn ProjectsView(
         <div class="workspace-layout project-layout">
             <header class="workspace-toolbar project-toolbar">
                 <div class="toolbar-leading">
-                    <WorkspaceNav />
                     <div class="project-heading">
                         <h1>"HomeTender"</h1>
                         <p>"~/Projects/hometender"</p>

@@ -406,6 +406,11 @@ pub struct Session {
     pub state: AgentState,
     pub started_at_unix_ms: u64,
     pub last_observed_at_unix_ms: Option<u64>,
+    /// Short human-readable title extracted from the session's first user
+    /// message.  `None` for sessions created inside Utu, or when not yet
+    /// extracted from a discovered external transcript.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title_hint: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]

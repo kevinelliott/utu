@@ -287,6 +287,7 @@ pub(crate) fn persist_thread_metadata(
             state: codex_thread_state(thread.status.as_deref()),
             started_at_unix_ms: timestamp_millis(thread.created_at).unwrap_or_else(unix_ms),
             last_observed_at_unix_ms: Some(unix_ms()),
+            title_hint: thread.name.clone().or_else(|| thread.preview.clone()),
         };
         store.upsert_session(&session).map_err(store_error)?;
         authorizations.push((
@@ -1147,6 +1148,7 @@ mod tests {
             state: AgentState::Idle,
             started_at_unix_ms: 1,
             last_observed_at_unix_ms: Some(1),
+            title_hint: None,
         };
         store.upsert_session(&session).unwrap();
 
@@ -1184,6 +1186,7 @@ mod tests {
             state: AgentState::Idle,
             started_at_unix_ms: 1,
             last_observed_at_unix_ms: Some(1),
+            title_hint: None,
         };
         store.upsert_session(&session).unwrap();
 
@@ -1234,6 +1237,7 @@ mod tests {
             state: AgentState::Idle,
             started_at_unix_ms: 1,
             last_observed_at_unix_ms: Some(1),
+            title_hint: None,
         };
         store.upsert_session(&session).unwrap();
 

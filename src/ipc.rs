@@ -95,6 +95,8 @@ pub struct SessionRecord {
     #[serde(default)]
     pub started_at_unix_ms: u64,
     pub last_observed_at_unix_ms: Option<u64>,
+    #[serde(default)]
+    pub title_hint: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
