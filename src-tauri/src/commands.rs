@@ -1,4 +1,7 @@
-use std::{path::Path, sync::{mpsc, Arc}};
+use std::{
+    path::Path,
+    sync::{Arc, mpsc},
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -181,12 +184,10 @@ pub async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
     app.dialog().file().pick_folder(move |path| {
         let _ = tx.send(path);
     });
-    tauri::async_runtime::spawn_blocking(move || {
-        rx.recv().ok().flatten().map(|p| p.to_string())
-    })
-    .await
-    .ok()
-    .flatten()
+    tauri::async_runtime::spawn_blocking(move || rx.recv().ok().flatten().map(|p| p.to_string()))
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
@@ -198,27 +199,26 @@ pub fn connector_catalog() -> Vec<ConnectorDescriptor> {
 pub async fn refresh_connectors(state: State<'_, AppState>) -> Result<DiagnosticReport, String> {
     let store = Arc::clone(&state.store);
     let codex = Arc::clone(&state.codex);
+    let supervisor = Arc::clone(&state.supervisor);
     tauri::async_runtime::spawn_blocking(move || {
         let _lifecycle = codex.lock_lifecycle();
         ensure_store_healthy(&store)?;
-        begin_connector_refresh(&store, &codex)?;
         let report = diagnose_known_connectors();
         persist_diagnostics(&store, &report)?;
+        drop(_lifecycle);
+        let _ = supervisor.import_with_report(&report);
         Ok(report)
     })
     .await
     .map_err(|error| format!("native worker failed: {error}"))?
 }
 
-fn begin_connector_refresh(
-    store: &Store,
-    codex: &crate::codex_runtime::CodexRuntime,
-) -> Result<(), String> {
-    // Diagnostics cannot prove that an already initialized App Server still
-    // represents the same account principal. Every explicit refresh revokes
-    // the volatile runtime lease and requires a new project-scoped sync.
-    codex.revoke_all();
-    crate::codex_commands::deactivate_codex_transport(store)
+#[tauri::command]
+pub fn latest_connector_report(state: State<'_, AppState>) -> Option<DiagnosticReport> {
+    state
+        .supervisor
+        .last_diagnostics()
+        .map(|report| (*report).clone())
 }
 
 #[tauri::command]
@@ -271,7 +271,8 @@ pub async fn create_project(
     state: State<'_, AppState>,
     input: CreateProjectInput,
 ) -> Result<Project, String> {
-    run_mutating(&state, move |store| {
+    let supervisor = Arc::clone(&state.supervisor);
+    let project = run_mutating(&state, move |store| {
         let name = required_text("project name", input.name)?;
         let root_path = input
             .root_path
@@ -288,7 +289,12 @@ pub async fn create_project(
         store.upsert_project(&project).map_err(store_error)?;
         Ok(project)
     })
-    .await
+    .await?;
+    let project_id = project.id.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = supervisor.hydrate_project(&project_id);
+    });
+    Ok(project)
 }
 
 #[tauri::command]
@@ -1260,7 +1266,7 @@ mod tests {
     }
 
     #[test]
-    fn even_positive_refresh_revokes_runtime_and_requires_project_resync() {
+    fn diagnostic_refresh_keeps_an_attached_codex_runtime() {
         use utu_connectors::{
             AuthDiagnostic, ConnectorDiagnostic, DiagnosticEvidence, ProbeStatus,
         };
@@ -1352,13 +1358,12 @@ mod tests {
                 command_evidence: Vec::new(),
             }],
         };
-        begin_connector_refresh(&store, &runtime).unwrap();
         persist_diagnostics(&store, &report).unwrap();
 
-        assert_eq!(runtime.authorized_session_count(), 0);
+        assert_eq!(runtime.authorized_session_count(), 1);
         let transport = store.get_integration("codex-app-server").unwrap().unwrap();
-        assert_eq!(transport.state, IntegrationState::Unknown);
-        assert!(!transport.capabilities.direct);
+        assert_eq!(transport.state, IntegrationState::Ready);
+        assert!(transport.capabilities.direct);
     }
 
     #[test]

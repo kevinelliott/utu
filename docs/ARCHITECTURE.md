@@ -25,9 +25,10 @@ Tauri desktop (primary)        Browser status (secondary)
 
 The current code implements the shared UI, core domain, evidence policy, native
 query/command layer, durable SQLite store, secure project-file reads, and bounded
-local CLI diagnostics. It also contains one experimental Codex vertical slice:
-explicit single-project metadata sync and one-shot, owner-armed text direction.
-Transcript and response ingestion, event/file/cost projection, approval handling,
+local CLI diagnostics. It also contains an experimental local-agent observation slice: explicit
+metadata sync for ready agents, filesystem watches for Claude Code and Codex
+sessions, and one-shot, owner-armed Codex text direction. Transcript and
+response ingestion, event/file/cost projection, approval handling,
 long-running multi-provider supervision, cloud adapters, credentials, and
 isolation runtimes remain planned boundaries rather than current claims.
 
@@ -65,16 +66,13 @@ Thread-safe local SQLite authority. Owns migrations and repositories for normali
 
 Tauri composition root. Owns process lifetime, typed IPC, application-data
 location, connector diagnostic workers, canonical-root filesystem reads, window
-state, and local logging. It owns the experimental Codex runtime lease: a fresh
-diagnostic binds an exact executable to one explicitly selected canonical
-project root, metadata-only sync activates that project in memory, and restart
-or any explicit connector refresh revokes delivery until resync. A successful
-diagnostic refresh also revokes because Utu cannot yet attest a stable
-provider-account identity across diagnostic and App Server processes. Each live
-text direction is separately armed and requests read-only, no-network, never-approve
-provider policy. Blocking SQLite, process, and filesystem work is moved off the
-UI thread. Credential/keychain, filesystem watches, durable output projection,
-multi-provider session supervision, and sandbox/VM coordination are future
+state, and local logging. It owns the experimental agent observation runtime: a fresh
+diagnostic binds Codex's exact executable to authorized project roots,
+metadata-only sync or startup hydration activates those projects, and
+filesystem watches keep Claude Code and Codex session records current.
+Blocking SQLite, process, and filesystem work is moved off the
+UI thread. Credential/keychain, durable output projection,
+multi-provider control supervision, and sandbox/VM coordination are future
 services.
 
 ### `utu-ui` (workspace root)
@@ -97,11 +95,11 @@ The durable store is append-oriented for messages and events, with mutable mater
 ## Process model
 
 Current diagnostic commands run off the UI thread with bounded output and
-per-process timeouts. The Codex vertical slice adds a bounded process-local
-client, but it is not a persistent supervisor: authorization is not restored
-after restart and provider notification payloads are discarded in metadata-only
-mode. The full supervisor—bounded concurrency, cancellation, restart policy,
-streaming backpressure, reconciliation, and health budgets—remains roadmap work.
+per-process timeouts. A session supervisor hydrates ready agents on startup,
+watches local session files, and reconnects Codex App Server after restart.
+Provider notification payloads are still discarded in metadata-only mode.
+The full control supervisor—bounded concurrency, cancellation, streaming
+backpressure, and health budgets—remains roadmap work.
 A misbehaving adapter must not block the UI or other adapters.
 
 A Codex `turn/start` response is stored as provider acknowledgement, not turn or

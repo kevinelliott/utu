@@ -31,6 +31,13 @@ pub fn LiveWorkspaceView(
                 </div>
                 <div class="toolbar-actions conversation-actions">
                     <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)><Icon path=ICON_FOLDER />"Files"</button>
+                    <Show when=move || live.selected_project_id.get().is_some()>
+                        <button class="secondary-button" type="button" disabled=move || live.session_syncing.get() on:click=move |_| {
+                            if let Some(project_id) = live.selected_project_id.get_untracked() {
+                                actions.dispatch(WorkspaceAction::SyncProjectSessions { project_id: Some(project_id) });
+                            }
+                        }>{move || if live.session_syncing.get() { "Syncing sessions…" } else { "Sync sessions" }}</button>
+                    </Show>
                     <button class="icon-button" type="button" aria-label="Workspace actions" title="Workspace actions"><Icon path=ICON_MORE /></button>
                 </div>
             </header>
@@ -78,16 +85,16 @@ pub fn LiveWorkspaceView(
                         } else if live.selected_session_id.get().is_some() {
                             "A stored session was found but its connector is not eligible for owner direction. Review connector evidence in Integrations and re-run checks to attach an active control transport."
                         } else {
-                            "No stored sessions for this project. Sync sessions from Codex CLI or run connector checks to discover eligible agents."
+                            "No stored sessions for this project. Utu watches ready agents after the first sync, or you can import session metadata now."
                         }
                     }}</p>
                     <div class="live-empty-actions">
                         <Show when=move || live.recordable_session_id().is_none() && live.selected_project_id.get().is_some()>
-                            <button class="secondary-button" type="button" disabled=move || live.codex_syncing.get() on:click=move |_| {
+                            <button class="secondary-button" type="button" disabled=move || live.session_syncing.get() on:click=move |_| {
                                 if let Some(project_id) = live.selected_project_id.get_untracked() {
-                                    actions.dispatch(WorkspaceAction::SyncCodexProject(project_id));
+                                    actions.dispatch(WorkspaceAction::SyncProjectSessions { project_id: Some(project_id) });
                                 }
-                            }>"Sync Codex sessions"</button>
+                            }>{move || if live.session_syncing.get() { "Syncing sessions…" } else { "Sync sessions" }}</button>
                         </Show>
                         <Show when=move || live.recordable_session_id().is_none()>
                             <button class="secondary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::RefreshConnector("all connectors".into()))>"Run connector checks"</button>

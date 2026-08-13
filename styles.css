@@ -4005,7 +4005,28 @@ button.task-band:hover {
 .live-record-row small { overflow: hidden; color: var(--muted); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
 .live-record-mark { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; background: var(--surface-soft); }
 
-.live-context-row { cursor: default; }
+.live-context-row { text-align: left; }
+
+.live-fleet-group {
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.live-fleet-group:last-child {
+  border-bottom: 0;
+}
+
+.live-fleet-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 10px 6px;
+}
+
+.live-fleet-group-header small {
+  color: var(--quiet);
+  font-size: 9px;
+}
 
 .context-loading-state {
   min-height: 42px;
@@ -4555,6 +4576,51 @@ input:focus-visible {
   gap: 9px;
   padding: 6px 9px;
   border-bottom: 1px solid var(--line);
+}
+
+.live-session-row {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+}
+
+.live-session-row > span:nth-child(2) {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.live-session-row strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-session-row small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-session-row:hover {
+  background: rgb(255 255 255 / 70%);
+}
+
+.live-session-row.is-selected {
+  background: var(--selection);
 }
 
 .live-task-row:last-child {

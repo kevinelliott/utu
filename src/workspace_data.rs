@@ -3,7 +3,8 @@ use std::sync::Arc;
 use leptos::{prelude::*, task::spawn_local};
 
 use crate::ipc::{
-    self, DiagnosticReport, ProjectDirectory, ProjectFilePreview, SessionStream, WorkspaceSnapshot,
+    self, DiagnosticReport, ProjectDirectory, ProjectFilePreview, SessionRecord, SessionStream,
+    SyncProjectSessionsSummary, WorkspaceSnapshot,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -152,7 +153,9 @@ pub enum WorkspaceAction {
     ResolvePermission(&'static str),
     RefreshConnector(String),
     ConfigureConnector(String),
-    SyncCodexProject(String),
+    SyncProjectSessions {
+        project_id: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -197,7 +200,7 @@ pub struct LiveStatus {
     pub selected_file_path: RwSignal<Option<String>>,
     pub requested_directory_path: RwSignal<Option<String>>,
     pub connector_refreshing: RwSignal<bool>,
-    pub codex_syncing: RwSignal<bool>,
+    pub session_syncing: RwSignal<bool>,
     pub project_creating: RwSignal<bool>,
     pub task_creating: RwSignal<bool>,
     pub project_create_error: RwSignal<Option<String>>,
@@ -227,7 +230,7 @@ impl LiveStatus {
             selected_file_path: RwSignal::new(None),
             requested_directory_path: RwSignal::new(None),
             connector_refreshing: RwSignal::new(false),
-            codex_syncing: RwSignal::new(false),
+            session_syncing: RwSignal::new(false),
             project_creating: RwSignal::new(false),
             task_creating: RwSignal::new(false),
             project_create_error: RwSignal::new(None),
@@ -261,6 +264,19 @@ impl LiveStatus {
             // Connector probes are deliberately started only after the durable
             // snapshot is published, so a slow CLI cannot hold the app in Loading.
             status.refresh_connectors();
+            ipc::listen_workspace_changed(move || {
+                spawn_local(async move {
+                    if let Ok(snapshot) = ipc::workspace_snapshot(None).await {
+                        status.accept_snapshot(snapshot);
+                    }
+                    if let Ok(Some(report)) = ipc::latest_connector_report().await {
+                        status.diagnostics.set(Some(Arc::new(report)));
+                    }
+                    if let Some(session_id) = status.selected_session_id.get_untracked() {
+                        status.load_session_stream(session_id);
+                    }
+                });
+            });
         });
     }
 
@@ -526,20 +542,17 @@ impl LiveStatus {
         });
     }
 
-    pub fn sync_codex_project(&self, project_id: String) {
-        if !self.is_desktop() || self.codex_syncing.get_untracked() {
+    pub fn sync_project_sessions(&self, project_id: Option<String>) {
+        if !self.is_desktop() || self.session_syncing.get_untracked() {
             return;
         }
-        self.codex_syncing.set(true);
+        self.session_syncing.set(true);
         self.error.set(None);
         let status = *self;
         spawn_local(async move {
-            match ipc::sync_codex_sessions(&project_id).await {
+            match ipc::sync_project_sessions(project_id.as_deref()).await {
                 Ok(summary) => {
-                    status.error.set(Some(format!(
-                        "Codex metadata sync completed: {} session records imported; {} transcripts imported.",
-                        summary.imported_sessions, summary.transcripts_imported
-                    )));
+                    status.error.set(Some(format_sync_summary(&summary)));
                     match ipc::workspace_snapshot(None).await {
                         Ok(snapshot) => status.accept_snapshot(snapshot),
                         Err(error) => status.error.set(Some(error)),
@@ -547,7 +560,7 @@ impl LiveStatus {
                 }
                 Err(error) => status.error.set(Some(error)),
             }
-            status.codex_syncing.set(false);
+            status.session_syncing.set(false);
         });
     }
 
@@ -652,6 +665,121 @@ impl LiveStatus {
     }
 }
 
+fn format_sync_summary(summary: &SyncProjectSessionsSummary) -> String {
+    let agents = summary
+        .agents
+        .iter()
+        .map(|agent| {
+            let summary = format!(
+                "{} {} ({})",
+                agent.display_name, agent.status, agent.imported_sessions
+            );
+            match agent.detail.as_deref() {
+                Some(detail) if !detail.is_empty() => format!("{summary}: {detail}"),
+                _ => summary,
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "Session metadata sync completed: {} session records imported. {agents}.",
+        summary.imported_sessions
+    )
+}
+
+pub fn session_title(snapshot: &WorkspaceSnapshot, session: &SessionRecord) -> String {
+    if let Some(title) = session.task_id.as_deref().and_then(|task_id| {
+        snapshot
+            .tasks
+            .iter()
+            .find(|task| task.id == task_id)
+            .map(|task| task.title.clone())
+    }) {
+        return title;
+    }
+    let agent = snapshot
+        .agents
+        .iter()
+        .find(|agent| agent.id == session.agent_id)
+        .map(|agent| agent.display_name.as_str())
+        .unwrap_or("Agent");
+    match session.provider_session_id.as_deref() {
+        Some(provider_id) if !provider_id.is_empty() => {
+            format!("{agent} · {}", short_provider_id(provider_id))
+        }
+        _ => agent.to_owned(),
+    }
+}
+
+pub fn session_detail(
+    snapshot: &WorkspaceSnapshot,
+    session: &SessionRecord,
+    include_project: bool,
+) -> String {
+    let agent = snapshot
+        .agents
+        .iter()
+        .find(|agent| agent.id == session.agent_id)
+        .map(|agent| agent.display_name.as_str())
+        .unwrap_or("Unknown agent");
+    let observed = relative_unix_ms(
+        snapshot.generated_at_unix_ms,
+        session.last_observed_at_unix_ms,
+    );
+    if include_project {
+        let project = snapshot
+            .projects
+            .iter()
+            .find(|project| project.id == session.project_id)
+            .map(|project| project.name.as_str())
+            .unwrap_or("Unknown project");
+        format!("{agent} · {project} · {observed}")
+    } else {
+        format!("{agent} · {observed}")
+    }
+}
+
+pub fn session_state_tone(state: &str) -> &'static str {
+    match state {
+        "running" => "healthy",
+        "waiting" => "attention",
+        "problem" => "problem",
+        "idle" | "offline" => "quiet",
+        _ => "quiet",
+    }
+}
+
+pub fn session_is_running(session: &SessionRecord) -> bool {
+    session.state == "running"
+}
+
+pub fn relative_unix_ms(now_ms: u64, then_ms: Option<u64>) -> String {
+    let Some(then_ms) = then_ms else {
+        return "Not observed".into();
+    };
+    let secs = now_ms.saturating_sub(then_ms) / 1000;
+    if secs < 15 {
+        "Just now".into()
+    } else if secs < 60 {
+        format!("{secs}s ago")
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else if secs < 86_400 {
+        format!("{}h ago", secs / 3600)
+    } else {
+        format!("{}d ago", secs / 86_400)
+    }
+}
+
+fn short_provider_id(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.chars().count() <= 8 {
+        trimmed.to_owned()
+    } else {
+        trimmed.chars().take(8).collect()
+    }
+}
+
 pub fn demo_action_notice(action: &WorkspaceAction, read_only: bool) -> String {
     if read_only {
         return "This web status surface is read-only. Open Utu on the owner device to take action.".into();
@@ -701,8 +829,8 @@ pub fn demo_action_notice(action: &WorkspaceAction, read_only: bool) -> String {
                 "Demo setup opened for {connector}. Credentials are not collected by this prototype."
             )
         }
-        WorkspaceAction::SyncCodexProject(_) => {
-            "Codex metadata synchronization is available only in the native owner app.".into()
+        WorkspaceAction::SyncProjectSessions { .. } => {
+            "Session synchronization is available only in the native owner app.".into()
         }
     }
 }

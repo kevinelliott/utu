@@ -31,11 +31,9 @@ pub fn IntegrationsView(
                     <div><h1>"Integrations"</h1><p>"Readiness, authentication, and supported controls"</p></div>
                 </div>
                 <div class="toolbar-actions">
-                    <button class="primary-outline" type="button" disabled=move || read_only || live.phase.get() == crate::workspace_data::LoadPhase::Error || live.selected_project_id.get().is_none() || live.codex_syncing.get() on:click=move |_| {
-                        if let Some(project_id) = live.selected_project_id.get_untracked() {
-                            actions.dispatch(WorkspaceAction::SyncCodexProject(project_id));
-                        }
-                    }>{move || if live.codex_syncing.get() { "Syncing Codex metadata…" } else { "Sync Codex for project" }}</button>
+                    <button class="primary-outline" type="button" disabled=move || read_only || live.phase.get() == crate::workspace_data::LoadPhase::Error || live.session_syncing.get() on:click=move |_| {
+                        actions.dispatch(WorkspaceAction::SyncProjectSessions { project_id: None });
+                    }>{move || if live.session_syncing.get() { "Syncing all agents…" } else { "Sync for All" }}</button>
                     <button class="secondary-button" type="button" disabled=move || read_only || live.phase.get() == crate::workspace_data::LoadPhase::Error on:click=refresh_all><Icon path=ICON_REFRESH />"Refresh checks"</button>
                     <button class="icon-button" type="button" aria-label="Integration actions"><Icon path=ICON_MORE /></button>
                 </div>
@@ -43,7 +41,7 @@ pub fn IntegrationsView(
 
             <div class=move || if live.is_desktop() { "truth-banner live-truth-banner" } else { "truth-banner" } role="note">
                 <Icon path=ICON_SHIELD />
-                <span><strong>{move || if live.is_desktop() { "Local diagnostics" } else { "Demonstration inventory" }}</strong>{move || if live.is_desktop() { "Utu runs bounded executable, version, and supported authentication probes. Codex metadata sync is opt-in, selected-project scoped, and never imports transcripts." } else { "These rows show intended connector states. Utu has not contacted a CLI, provider, account, or browser session." }}</span>
+                <span><strong>{move || if live.is_desktop() { "Local diagnostics" } else { "Demonstration inventory" }}</strong>{move || if live.is_desktop() { "Utu watches ready agents after setup. Use Sync for All only for first import or a manual refresh. Session metadata is observed continuously; transcripts are never imported." } else { "These rows show intended connector states. Utu has not contacted a CLI, provider, account, or browser session." }}</span>
             </div>
 
             <div class="integration-list" class:is-checking=move || live.connector_refreshing.get()>

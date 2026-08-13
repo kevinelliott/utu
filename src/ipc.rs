@@ -2,7 +2,7 @@
 
 use js_sys::{Function, Promise, Reflect};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::JsFuture;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -92,6 +92,8 @@ pub struct SessionRecord {
     pub agent_id: String,
     pub provider_session_id: Option<String>,
     pub state: String,
+    #[serde(default)]
+    pub started_at_unix_ms: u64,
     pub last_observed_at_unix_ms: Option<u64>,
 }
 
@@ -382,25 +384,35 @@ struct DirectionInput<'a> {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SyncCodexSessionsSummary {
+pub struct SyncProjectSessionsSummary {
     pub metadata_only: bool,
-    pub handshake_confirmed: bool,
-    pub discovered: u32,
     pub imported_sessions: u32,
     pub transcripts_imported: u32,
+    pub agents: Vec<AgentSyncSummary>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSyncSummary {
+    pub agent_id: String,
+    pub display_name: String,
+    pub status: String,
+    pub imported_sessions: u32,
+    pub detail: Option<String>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SyncCodexSessionsArgs<'a> {
-    input: SyncCodexSessionsInput<'a>,
+struct SyncProjectSessionsArgs {
+    input: SyncProjectSessionsInput,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SyncCodexSessionsInput<'a> {
+struct SyncProjectSessionsInput {
     confirmed_metadata_sync: bool,
-    project_ids: &'a [String],
+    project_ids: Vec<String>,
+    all_projects: bool,
     import_transcripts: bool,
 }
 
@@ -486,19 +498,29 @@ pub async fn send_direction(
     .await
 }
 
-pub async fn sync_codex_sessions(project_id: &str) -> Result<SyncCodexSessionsSummary, String> {
-    let project_ids = [project_id.to_owned()];
+pub async fn sync_project_sessions(
+    project_id: Option<&str>,
+) -> Result<SyncProjectSessionsSummary, String> {
+    let (project_ids, all_projects) = match project_id {
+        Some(project_id) => (vec![project_id.to_owned()], false),
+        None => (Vec::new(), true),
+    };
     invoke(
-        "sync_codex_sessions",
-        &SyncCodexSessionsArgs {
-            input: SyncCodexSessionsInput {
+        "sync_project_sessions",
+        &SyncProjectSessionsArgs {
+            input: SyncProjectSessionsInput {
                 confirmed_metadata_sync: true,
-                project_ids: &project_ids,
+                project_ids,
+                all_projects,
                 import_transcripts: false,
             },
         },
     )
     .await
+}
+
+pub async fn latest_connector_report() -> Result<Option<DiagnosticReport>, String> {
+    invoke("latest_connector_report", &EmptyArgs {}).await
 }
 
 pub async fn session_stream(session_id: &str) -> Result<SessionStream, String> {
@@ -561,6 +583,36 @@ async fn invoke<T: DeserializeOwned>(command: &str, args: &impl Serialize) -> Re
     let value = JsFuture::from(promise).await.map_err(js_error)?;
     serde_wasm_bindgen::from_value(value)
         .map_err(|error| format!("could not decode `{command}` result: {error}"))
+}
+
+pub fn listen_workspace_changed(on_change: impl Fn() + 'static) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(tauri) = Reflect::get(window.as_ref(), &JsValue::from_str("__TAURI__")) else {
+        return;
+    };
+    if tauri.is_null() || tauri.is_undefined() {
+        return;
+    }
+    let Ok(event) = Reflect::get(&tauri, &JsValue::from_str("event")) else {
+        return;
+    };
+    let Ok(listen) = Reflect::get(&event, &JsValue::from_str("listen")) else {
+        return;
+    };
+    let Ok(listen) = listen.dyn_into::<Function>() else {
+        return;
+    };
+    let callback = Closure::wrap(Box::new(move |_event: JsValue| {
+        on_change();
+    }) as Box<dyn FnMut(JsValue)>);
+    let _ = listen.call2(
+        &event,
+        &JsValue::from_str("utu-workspace-changed"),
+        callback.as_ref().unchecked_ref(),
+    );
+    callback.forget();
 }
 
 fn tauri_invoke() -> Option<Function> {

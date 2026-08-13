@@ -11,12 +11,13 @@ use utu_core::{
 use utu_store::{NewMessage, Store};
 
 use crate::clock::entity_id;
+use crate::ids::deterministic_id;
 use crate::{clock::unix_ms, codex_runtime::CodexRuntime, state::AppState};
 
-const CODEX_PROVIDER_ID: &str = "codex";
-const CODEX_DIAGNOSTIC_INTEGRATION_ID: &str = "codex";
-const CODEX_TRANSPORT_INTEGRATION_ID: &str = "codex-app-server";
-const CODEX_AGENT_ID: &str = "codex-app-server";
+pub(crate) const CODEX_PROVIDER_ID: &str = "codex";
+pub(crate) const CODEX_DIAGNOSTIC_INTEGRATION_ID: &str = "codex";
+pub(crate) const CODEX_TRANSPORT_INTEGRATION_ID: &str = "codex-app-server";
+pub(crate) const CODEX_AGENT_ID: &str = "codex-app-server";
 const MAX_PROVIDER_RECEIPT_ID_BYTES: usize = 512;
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -56,9 +57,9 @@ pub struct CodexDirectionOutcome {
 
 type RuntimeAuthorization = (String, String, String, String);
 
-struct PersistedMetadata {
-    summary: SyncCodexSessionsSummary,
-    authorizations: Vec<RuntimeAuthorization>,
+pub(crate) struct PersistedMetadata {
+    pub summary: SyncCodexSessionsSummary,
+    pub authorizations: Vec<RuntimeAuthorization>,
 }
 
 enum DirectionDelivery {
@@ -125,7 +126,7 @@ pub async fn sync_codex_sessions(
         aggregate.server_version = server_version.clone();
         aggregate.handshake_confirmed = true;
         activate_codex_transport(&store, &server_version)?;
-        runtime.replace_authorized_sessions(authorizations);
+        runtime.replace_project_authorizations(&input.project_ids[0], authorizations);
         Ok(aggregate)
     })
     .await
@@ -180,7 +181,7 @@ fn confirmed_sync_projects(
     Ok(projects)
 }
 
-fn require_fresh_codex_diagnostic(
+pub(crate) fn require_fresh_codex_diagnostic(
     diagnostic: &utu_connectors::ConnectorDiagnostic,
 ) -> Result<std::path::PathBuf, String> {
     if diagnostic.readiness != Readiness::Ready
@@ -237,7 +238,7 @@ fn merge_sync_summary(aggregate: &mut SyncCodexSessionsSummary, next: SyncCodexS
         .saturating_add(next.skipped_nonlocal_cwd);
 }
 
-fn persist_thread_metadata(
+pub(crate) fn persist_thread_metadata(
     store: &Store,
     server_version: &str,
     threads: &[ThreadSummary],
@@ -304,7 +305,7 @@ fn persist_thread_metadata(
     })
 }
 
-fn activate_codex_transport(store: &Store, server_version: &str) -> Result<(), String> {
+pub(crate) fn activate_codex_transport(store: &Store, server_version: &str) -> Result<(), String> {
     let diagnostic = require_ready_codex_diagnostic(store)?;
     let capabilities = ConnectorCapabilities {
         observe: true,
@@ -345,34 +346,49 @@ fn activate_codex_transport(store: &Store, server_version: &str) -> Result<(), S
         .map_err(store_error)
 }
 
-fn prepare_codex_identity(store: &Store, server_version: &str) -> Result<(), String> {
+pub(crate) fn prepare_codex_identity(store: &Store, server_version: &str) -> Result<(), String> {
     let diagnostic = require_ready_codex_diagnostic(store)?;
-    let integration = utu_core::Integration {
-        id: CODEX_TRANSPORT_INTEGRATION_ID.into(),
-        provider_id: Some(CODEX_PROVIDER_ID.into()),
-        connector_key: CODEX_TRANSPORT_INTEGRATION_ID.into(),
-        display_name: "Codex App Server".into(),
-        kind: utu_core::ProviderKind::LocalCli,
-        state: IntegrationState::Unknown,
-        auth: diagnostic.auth,
-        evidence: EvidenceKind::Observed,
-        checked_at_unix_ms: Some(unix_ms()),
-        problem: Some("Project-scoped Codex metadata synchronization is not complete.".into()),
-        capabilities: ConnectorCapabilities::default(),
-    };
-    store
-        .upsert_integration(&integration)
-        .map_err(store_error)?;
-    store
-        .upsert_agent(&Agent {
-            id: CODEX_AGENT_ID.into(),
-            provider_id: CODEX_PROVIDER_ID.into(),
-            connector_id: CODEX_TRANSPORT_INTEGRATION_ID.into(),
+    if store
+        .get_integration(CODEX_TRANSPORT_INTEGRATION_ID)
+        .map_err(store_error)?
+        .is_none()
+    {
+        let integration = utu_core::Integration {
+            id: CODEX_TRANSPORT_INTEGRATION_ID.into(),
+            provider_id: Some(CODEX_PROVIDER_ID.into()),
+            connector_key: CODEX_TRANSPORT_INTEGRATION_ID.into(),
             display_name: "Codex App Server".into(),
-            model: Some(server_version.to_owned()),
+            kind: utu_core::ProviderKind::LocalCli,
+            state: IntegrationState::Unknown,
+            auth: diagnostic.auth,
+            evidence: EvidenceKind::Observed,
+            checked_at_unix_ms: Some(unix_ms()),
+            problem: Some("Project-scoped Codex metadata synchronization is not complete.".into()),
             capabilities: ConnectorCapabilities::default(),
-        })
-        .map_err(store_error)
+        };
+        store
+            .upsert_integration(&integration)
+            .map_err(store_error)?;
+    }
+    match store.get_agent(CODEX_AGENT_ID).map_err(store_error)? {
+        Some(mut agent) => {
+            if agent.model.as_deref() != Some(server_version) {
+                agent.model = Some(server_version.to_owned());
+                store.upsert_agent(&agent).map_err(store_error)?;
+            }
+            Ok(())
+        }
+        None => store
+            .upsert_agent(&Agent {
+                id: CODEX_AGENT_ID.into(),
+                provider_id: CODEX_PROVIDER_ID.into(),
+                connector_id: CODEX_TRANSPORT_INTEGRATION_ID.into(),
+                display_name: "Codex App Server".into(),
+                model: Some(server_version.to_owned()),
+                capabilities: ConnectorCapabilities::default(),
+            })
+            .map_err(store_error),
+    }
 }
 
 pub(crate) fn deactivate_codex_transport(store: &Store) -> Result<(), String> {
@@ -748,7 +764,7 @@ fn valid_provider_receipt_id(value: &str) -> bool {
         && !value.chars().any(char::is_control)
 }
 
-fn canonical_stored_project_root(project: &Project) -> Result<String, String> {
+pub(crate) fn canonical_stored_project_root(project: &Project) -> Result<String, String> {
     let root = project
         .root_path
         .as_deref()
@@ -774,17 +790,6 @@ fn capabilities_subset(candidate: ConnectorCapabilities, boundary: ConnectorCapa
         && (!candidate.logs || boundary.logs)
         && (!candidate.costs || boundary.costs)
         && (!candidate.agent_messages || boundary.agent_messages)
-}
-
-fn deterministic_id(prefix: &str, value: &str) -> String {
-    let mut id = String::with_capacity(prefix.len() + 1 + value.len().saturating_mul(2));
-    id.push_str(prefix);
-    id.push('-');
-    for byte in value.as_bytes() {
-        use std::fmt::Write as _;
-        let _ = write!(id, "{byte:02x}");
-    }
-    id
 }
 
 fn codex_thread_state(status: Option<&str>) -> AgentState {
@@ -1039,6 +1044,23 @@ mod tests {
             .unwrap();
         assert_eq!(transport.state, IntegrationState::Unknown);
         assert!(!transport.capabilities.direct);
+    }
+
+    #[test]
+    fn prepare_codex_identity_does_not_invalidate_an_activated_agent() {
+        let root = Fixture::new();
+        let store = ready_store(&root.canonical());
+        ensure_codex_agent(&store, "codex-test").unwrap();
+        prepare_codex_identity(&store, "codex-next").unwrap();
+        let agent = store.get_agent(CODEX_AGENT_ID).unwrap().unwrap();
+        let transport = store
+            .get_integration(CODEX_TRANSPORT_INTEGRATION_ID)
+            .unwrap()
+            .unwrap();
+        assert!(agent.capabilities.direct);
+        assert_eq!(agent.model.as_deref(), Some("codex-next"));
+        assert_eq!(transport.state, IntegrationState::Ready);
+        assert!(transport.capabilities.direct);
     }
 
     #[test]

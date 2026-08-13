@@ -109,16 +109,22 @@ impl CodexRuntime {
             .lock()
             .unwrap_or_else(|poison| poison.into_inner());
         state.authorized_sessions.clear();
-        for (session_id, project_id, canonical_root, provider_thread_id) in authorizations {
-            state.authorized_sessions.insert(
-                session_id,
-                SessionAuthorization {
-                    project_id,
-                    canonical_root,
-                    provider_thread_id,
-                },
-            );
-        }
+        insert_authorizations(&mut state, authorizations);
+    }
+
+    pub fn replace_project_authorizations(
+        &self,
+        project_id: &str,
+        authorizations: impl IntoIterator<Item = (String, String, String, String)>,
+    ) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        state
+            .authorized_sessions
+            .retain(|_, entry| entry.project_id != project_id);
+        insert_authorizations(&mut state, authorizations);
     }
 
     pub fn revoke_all(&self) {
@@ -262,6 +268,22 @@ impl CodexRuntime {
                     && entry.canonical_root == canonical_root
                     && entry.provider_thread_id == provider_thread_id
             })
+    }
+}
+
+fn insert_authorizations(
+    state: &mut RuntimeState,
+    authorizations: impl IntoIterator<Item = (String, String, String, String)>,
+) {
+    for (session_id, project_id, canonical_root, provider_thread_id) in authorizations {
+        state.authorized_sessions.insert(
+            session_id,
+            SessionAuthorization {
+                project_id,
+                canonical_root,
+                provider_thread_id,
+            },
+        );
     }
 }
 
@@ -416,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn restart_and_single_project_resync_leave_other_sessions_unauthorized() {
+    fn project_resync_replaces_only_that_projects_leases() {
         let runtime = CodexRuntime::default();
         assert_eq!(runtime.authorized_session_count(), 0);
 
@@ -439,19 +461,48 @@ mod tests {
             "thread-b"
         ));
 
-        // Every explicit sync starts by dropping the prior process and leases.
-        runtime.revoke_all();
-        runtime.replace_authorized_sessions([(
-            "session-b".into(),
-            "project-b".into(),
-            "/canonical/b".into(),
-            "thread-b".into(),
-        )]);
+        runtime.replace_project_authorizations(
+            "project-b",
+            [(
+                "session-b".into(),
+                "project-b".into(),
+                "/canonical/b".into(),
+                "thread-b".into(),
+            )],
+        );
+        assert!(runtime.has_authorization_entry(
+            "session-a",
+            "project-a",
+            "/canonical/a",
+            "thread-a"
+        ));
+        assert!(runtime.has_authorization_entry(
+            "session-b",
+            "project-b",
+            "/canonical/b",
+            "thread-b"
+        ));
+
+        runtime.replace_project_authorizations(
+            "project-a",
+            [(
+                "session-a2".into(),
+                "project-a".into(),
+                "/canonical/a".into(),
+                "thread-a2".into(),
+            )],
+        );
         assert!(!runtime.has_authorization_entry(
             "session-a",
             "project-a",
             "/canonical/a",
             "thread-a"
+        ));
+        assert!(runtime.has_authorization_entry(
+            "session-a2",
+            "project-a",
+            "/canonical/a",
+            "thread-a2"
         ));
         assert!(runtime.has_authorization_entry(
             "session-b",

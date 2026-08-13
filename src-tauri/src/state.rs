@@ -2,7 +2,9 @@ use std::{fs, path::Path, sync::Arc};
 
 use utu_store::Store;
 
+use crate::agent_sessions::SessionRoots;
 use crate::codex_runtime::CodexRuntime;
+use crate::supervisor::SessionSupervisor;
 
 /// Native application authority shared by Tauri commands.
 ///
@@ -13,9 +15,14 @@ use crate::codex_runtime::CodexRuntime;
 pub struct AppState {
     pub store: Arc<Store>,
     pub codex: Arc<CodexRuntime>,
+    pub supervisor: Arc<SessionSupervisor>,
 }
 
 impl AppState {
+    pub fn session_roots(&self) -> SessionRoots {
+        self.supervisor.roots()
+    }
+
     pub fn open(data_directory: impl AsRef<Path>) -> Result<Self, String> {
         let data_directory = data_directory.as_ref();
         fs::create_dir_all(data_directory).map_err(|error| {
@@ -30,9 +37,17 @@ impl AppState {
             .map_err(|error| format!("could not open the Utu local store: {error}"))?;
         deactivate_volatile_codex_transport(&store)?;
         tighten_database_permissions(&database_path)?;
+        let store = Arc::new(store);
+        let codex = Arc::new(CodexRuntime::default());
+        let supervisor = SessionSupervisor::new(
+            Arc::clone(&store),
+            Arc::clone(&codex),
+            SessionRoots::from_env(),
+        );
         Ok(Self {
-            store: Arc::new(store),
-            codex: Arc::new(CodexRuntime::default()),
+            store,
+            codex,
+            supervisor,
         })
     }
 }

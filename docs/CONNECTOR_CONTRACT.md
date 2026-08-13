@@ -88,18 +88,22 @@ not exercised against owner sessions.
 
 The native application exposes a deliberately smaller, experimental slice:
 
-- metadata sync requires explicit confirmation for exactly one selected local
-  project and a fresh ready/authenticated diagnostic;
-- the runtime binds the exact observed executable, accepts only threads whose
-  canonical cwd exactly equals that project's canonical root, and authorizes
-  that project only for the current attached process;
-- restart, runtime loss, or any explicit connector refresh revokes effective
-  direct capability; explicit project resync is required. Even a successful
-  diagnostic refresh revokes because the current slice cannot attest a stable
-  provider-account identity across processes;
-- sync imports session/thread metadata only. Transcript bodies, agent responses,
-  notification payloads, provider events, file changes, costs, and approval
-  requests are discarded or not requested;
+- metadata sync requires explicit confirmation for a selected local project or
+  Sync for All. Sync for All discovers Claude Code and Codex session roots on
+  disk, creates missing Utu projects for those directories, and imports
+  metadata for every ready authenticated agent;
+- after that first import, Utu watches local Claude Code and Codex session
+  files and refreshes connector diagnostics on a heartbeat so the workspace
+  stays current without another manual sync;
+- the Codex runtime binds the exact observed executable, accepts only threads
+  whose canonical cwd exactly equals that project's canonical root, and
+  authorizes that project for the current attached process without revoking
+  other projects;
+- restart still drops the volatile Codex App Server process; the supervisor
+  reconnects and re-imports metadata automatically;
+- sync imports session/thread metadata only. Transcript bodies, agent
+  responses, notification payloads, provider events, file changes, costs, and
+  approval requests are discarded or not requested;
 - every provider-bound text direction needs a separate one-shot owner
   confirmation and requests provider read-only, no-network, and `Never`
   approval policies. These are requested provider settings, not verified host

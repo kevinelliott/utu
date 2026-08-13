@@ -1,10 +1,14 @@
 mod about;
+mod agent_sessions;
 mod clock;
 mod codex_commands;
 mod codex_runtime;
 mod commands;
+mod ids;
 mod project_files;
+mod session_sync;
 mod state;
+mod supervisor;
 
 use std::env;
 use tauri::Manager;
@@ -59,7 +63,8 @@ pub fn run() {
                     AppState::open(data_directory)
                 }))
                 .map_err(|error| format!("local store initialization worker failed: {error}"))??;
-            app.manage(state);
+            app.manage(state.clone());
+            state.supervisor.attach_and_start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -67,7 +72,8 @@ pub fn run() {
             host_summary,
             about::close_about_window,
             commands::pick_folder,
-            codex_commands::sync_codex_sessions,
+            session_sync::sync_project_sessions,
+            commands::latest_connector_report,
             commands::connector_catalog,
             commands::refresh_connectors,
             commands::workspace_snapshot,

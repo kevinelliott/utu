@@ -174,14 +174,34 @@ const CODEX_TRANSPORTS: &[TransportDescriptor] = &[
     },
 ];
 
-const CLAUDE_TRANSPORTS: &[TransportDescriptor] = &[TransportDescriptor {
-    id: "structured-output",
-    display_name: "Structured CLI output",
-    kind: TransportKind::StructuredOutput,
-    implementation: AdapterImplementation::Planned,
-    capabilities: STRUCTURED_AGENT_CAPABILITIES,
-    note: "Claude Code documents JSON and stream-JSON output; orchestration is not implemented in Utu yet.",
-}];
+const CLAUDE_TRANSPORTS: &[TransportDescriptor] = &[
+    TransportDescriptor {
+        id: "session-files",
+        display_name: "Local session files",
+        kind: TransportKind::StructuredOutput,
+        implementation: AdapterImplementation::Available,
+        capabilities: AdapterCapabilities {
+            discover: true,
+            version_probe: true,
+            auth_probe: true,
+            sessions: true,
+            chat: false,
+            files: false,
+            event_stream: true,
+            logs: false,
+            costs: false,
+        },
+        note: "Utu observes Claude Code session metadata from ~/.claude/projects; transcripts are not imported and orchestration is not implemented.",
+    },
+    TransportDescriptor {
+        id: "structured-output",
+        display_name: "Structured CLI output",
+        kind: TransportKind::StructuredOutput,
+        implementation: AdapterImplementation::Planned,
+        capabilities: STRUCTURED_AGENT_CAPABILITIES,
+        note: "Claude Code documents JSON and stream-JSON output; orchestration is not implemented in Utu yet.",
+    },
+];
 
 const CURSOR_TRANSPORTS: &[TransportDescriptor] = &[TransportDescriptor {
     id: "structured-output",

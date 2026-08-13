@@ -16,7 +16,8 @@ use crate::{
     },
     workspace_data::{
         LiveStatus, LoadPhase, WorkspaceAction, WorkspaceActionSink, WorkspaceModel,
-        demo_action_notice,
+        demo_action_notice, relative_unix_ms, session_detail, session_is_running,
+        session_state_tone, session_title,
     },
 };
 
@@ -49,7 +50,7 @@ impl AppView {
             Self::Workspace => "Projects and sessions",
             Self::Attention => "Decisions and problems",
             Self::Projects => "Work across outcomes",
-            Self::Fleet => "Agents and runtimes",
+            Self::Fleet => "Running agent sessions",
             Self::Integrations => "Connectors and capabilities",
         }
     }
@@ -76,6 +77,7 @@ pub fn App() -> impl IntoView {
     let live = LiveStatus::new(surface);
     provide_context(WorkspaceModel::demo());
     provide_context(live);
+    provide_context(active_view);
     let action_live = live;
     provide_context(WorkspaceActionSink(Callback::new(move |action| {
         match &action {
@@ -213,8 +215,8 @@ pub fn App() -> impl IntoView {
                     .set(Some(connector_id.clone()));
                 return;
             }
-            WorkspaceAction::SyncCodexProject(project_id) if action_live.is_desktop() => {
-                action_live.sync_codex_project(project_id.clone());
+            WorkspaceAction::SyncProjectSessions { project_id } if action_live.is_desktop() => {
+                action_live.sync_project_sessions(project_id.clone());
                 return;
             }
             _ => {}
@@ -290,7 +292,7 @@ pub fn App() -> impl IntoView {
                     </Show>
                     <Show when=move || active_view.get() == AppView::Fleet>
                         <Show when=move || live.is_desktop() fallback=move || view! { <FleetView inspector_open read_only notice /> }>
-                            <LiveCollectionView kind="fleet" inspector_open />
+                            <LiveFleetView inspector_open />
                         </Show>
                     </Show>
                     <Show when=move || active_view.get() == AppView::Integrations>
@@ -717,7 +719,7 @@ fn LiveCollectionView(kind: &'static str, inspector_open: RwSignal<bool>) -> imp
                     <div class="live-collection-empty"><span class="live-workspace-glyph"><Icon path=ICON_FOLDER /></span><strong>{empty_title}</strong><small>{empty_detail}</small></div>
                 </Show>
                 <div class="live-record-list">
-                    {move || live_collection_rows(&live, kind).into_iter().map(|(name, detail, state)| view! {
+                    {move || live_collection_rows(&live, kind).into_iter().map(|(_, name, detail, state)| view! {
                         <article class="live-record-row"><span class="live-record-mark"><StatusDot tone="quiet" /></span><span><strong>{name}</strong><small>{detail}</small></span><span class="state-label quiet">{state}</span></article>
                     }).collect_view()}
                 </div>
@@ -730,11 +732,12 @@ fn LiveCollectionView(kind: &'static str, inspector_open: RwSignal<bool>) -> imp
 fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
     let live = expect_context::<LiveStatus>();
     let actions = expect_context::<WorkspaceActionSink>();
+    let active_view = expect_context::<RwSignal<AppView>>();
 
     view! {
         <div class="workspace-layout live-collection-layout live-projects-layout">
             <header class="workspace-toolbar">
-                <div class="toolbar-leading"><WorkspaceNav /><div><h1>"Projects"</h1><p>"Outcomes and tasks stored on this owner device"</p></div></div>
+                <div class="toolbar-leading"><WorkspaceNav /><div><h1>"Projects"</h1><p>"Select a project to list its agent sessions"</p></div></div>
                 <div class="toolbar-actions">
                     <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)>"Details"</button>
                     <button
@@ -751,7 +754,7 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
             </header>
             <div class="truth-banner live-truth-banner" role="note">
                 <Icon path=ICON_ATTENTION />
-                <span><strong>"Local work records"</strong>"Projects and tasks below are persisted by Utu on this device. Provider activity appears only after an integration records it."</span>
+                <span><strong>"Local work records"</strong>"Click a project to list its stored sessions. Session rows open the workspace conversation."</span>
             </div>
             <div class="live-projects-content">
                 <Show when=move || live.phase.get() == LoadPhase::Loading>
@@ -769,45 +772,101 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
                     </div>
                 </Show>
                 <div class="live-project-groups">
-                    {move || live.snapshot.get().map(|snapshot| snapshot.projects.iter().map(|project| {
+                    {move || live.snapshot.get().map(|snapshot| {
+                        let selected = live.selected_project_id.get();
+                        snapshot.projects.iter().map(|project| {
                         let project_id = project.id.clone();
                         let select_id = project_id.clone();
                         let task_id = project_id.clone();
                         let project_name = project.name.clone();
                         let root_path = project.root_path.clone().unwrap_or_else(|| "No local root recorded".into());
                         let project_state = project.state.clone();
-                        let tasks = snapshot.tasks.iter().filter(|task| task.project_id == project_id).cloned().collect::<Vec<_>>();
+                        let is_selected = selected.as_deref() == Some(project_id.as_str());
+                        let session_count = snapshot
+                            .sessions
+                            .iter()
+                            .filter(|session| session.project_id == project_id)
+                            .count();
+                        let mut sessions = if is_selected {
+                            snapshot
+                                .sessions
+                                .iter()
+                                .filter(|session| session.project_id == project_id)
+                                .cloned()
+                                .collect::<Vec<_>>()
+                        } else {
+                            Vec::new()
+                        };
+                        sort_sessions_for_display(&mut sessions);
+                        let tasks = if is_selected {
+                            snapshot.tasks.iter().filter(|task| task.project_id == project_id).cloned().collect::<Vec<_>>()
+                        } else {
+                            Vec::new()
+                        };
                         let task_count = tasks.len();
                         let agents = snapshot.agents.clone();
                         let empty_task_id = StoredValue::new(project_id.clone());
+                        let empty_sync_id = StoredValue::new(project_id.clone());
                         view! {
-                            <section class=move || if live.selected_project_id.get().as_deref() == Some(project_id.as_str()) { "live-project-group is-selected" } else { "live-project-group" }>
+                            <section class=if is_selected { "live-project-group is-selected" } else { "live-project-group" }>
                                 <header class="live-project-group-header">
                                     <button class="live-project-select" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SelectProject(select_id.clone()))>
                                         <span class="live-project-mark"><Icon path=ICON_FOLDER /></span>
                                         <span><strong>{project_name}</strong><small>{root_path}</small></span>
-                                        <span class="live-project-summary"><span class="state-label quiet">{project_state}</span><small>{task_count}" tasks"</small></span>
+                                        <span class="live-project-summary"><span class="state-label quiet">{project_state}</span><small>{session_count}" sessions"</small></span>
                                     </button>
                                     <button class="secondary-button compact-project-action" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::OpenCreateTask(task_id.clone()))><Icon path=ICON_PLUS />"Task"</button>
                                 </header>
-                                <div class="live-task-list">
-                                    {tasks.into_iter().map(|task| {
-                                        let assignment = task_assignment_label(&agents, &task.assignee_agent_ids);
-                                        view! {
-                                            <article class="live-task-row">
-                                                <span class="live-task-state"><StatusDot tone=if task.assignee_agent_ids.is_empty() { "quiet" } else { "healthy" } /></span>
-                                                <span><strong>{task.title}</strong><small>{assignment}</small></span>
-                                                <span class="state-label quiet">{task.state}</span>
-                                            </article>
-                                        }
-                                    }).collect_view()}
-                                    <Show when=move || task_count == 0>
-                                        <div class="live-task-empty"><span>"No tasks in this project"</span><button type="button" on:click=move |_| actions.dispatch(WorkspaceAction::OpenCreateTask(empty_task_id.get_value()))>"Create one"</button></div>
-                                    </Show>
-                                </div>
+                                {if is_selected {
+                                    view! {
+                                        <div class="live-task-list">
+                                            {sessions.into_iter().map(|session| {
+                                                let session_id = session.id.clone();
+                                                let selected_id = session_id.clone();
+                                                let title = session_title(&snapshot, &session);
+                                                let detail = session_detail(&snapshot, &session, false);
+                                                let state = session.state.clone();
+                                                let tone = session_state_tone(&session.state);
+                                                view! {
+                                                    <button
+                                                        class=move || if live.selected_session_id.get().as_deref() == Some(selected_id.as_str()) { "live-session-row is-selected" } else { "live-session-row" }
+                                                        type="button"
+                                                        on:click=move |_| {
+                                                            actions.dispatch(WorkspaceAction::SelectSession(session_id.clone()));
+                                                            active_view.set(AppView::Workspace);
+                                                        }
+                                                    >
+                                                        <span class="live-task-state"><StatusDot tone /></span>
+                                                        <span><strong>{title}</strong><small>{detail}</small></span>
+                                                        <span class=move || format!("state-label {tone}")>{state}</span>
+                                                    </button>
+                                                }
+                                            }).collect_view()}
+                                            {tasks.into_iter().map(|task| {
+                                                let assignment = task_assignment_label(&agents, &task.assignee_agent_ids);
+                                                view! {
+                                                    <article class="live-task-row">
+                                                        <span class="live-task-state"><StatusDot tone=if task.assignee_agent_ids.is_empty() { "quiet" } else { "healthy" } /></span>
+                                                        <span><strong>{task.title}</strong><small>{assignment}</small></span>
+                                                        <span class="state-label quiet">{task.state}</span>
+                                                    </article>
+                                                }
+                                            }).collect_view()}
+                                            <Show when=move || session_count == 0 && task_count == 0>
+                                                <div class="live-task-empty">
+                                                    <span>"No sessions in this project"</span>
+                                                    <button type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SyncProjectSessions { project_id: Some(empty_sync_id.get_value()) })>"Sync sessions"</button>
+                                                    <button type="button" on:click=move |_| actions.dispatch(WorkspaceAction::OpenCreateTask(empty_task_id.get_value()))>"Create a task"</button>
+                                                </div>
+                                            </Show>
+                                        </div>
+                                    }.into_any()
+                                } else {
+                                    view! { <></> }.into_any()
+                                }}
                             </section>
                         }
-                    }).collect_view())}
+                    }).collect_view()})}
                 </div>
             </div>
         </div>
@@ -832,18 +891,207 @@ fn task_assignment_label(agents: &[crate::ipc::AgentRecord], assignee_ids: &[Str
 }
 
 #[component]
+fn LiveFleetView(inspector_open: RwSignal<bool>) -> impl IntoView {
+    let live = expect_context::<LiveStatus>();
+    let actions = expect_context::<WorkspaceActionSink>();
+    let active_view = expect_context::<RwSignal<AppView>>();
+
+    view! {
+        <div class="workspace-layout live-collection-layout">
+            <header class="workspace-toolbar">
+                <div class="toolbar-leading"><WorkspaceNav /><div><h1>"Fleet"</h1><p>{move || fleet_subtitle(&live)}</p></div></div>
+                <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)>"Details"</button>
+            </header>
+            <div class="truth-banner live-truth-banner" role="note">
+                <Icon path=ICON_ATTENTION />
+                <span><strong>"Observed agent sessions"</strong>"Every stored session is listed. Running sessions stay at the top; idle history remains visible."</span>
+            </div>
+            <div class="live-collection-content">
+                <Show when=move || live.phase.get() == LoadPhase::Loading>
+                    <div class="live-collection-empty"><span class="spinner"></span><strong>"Loading agent sessions"</strong><small>"Waiting for the native workspace snapshot."</small></div>
+                </Show>
+                <Show when=move || live.phase.get() == LoadPhase::Error>
+                    <div class="live-collection-empty"><span class="live-workspace-glyph is-problem"><Icon path=ICON_ATTENTION /></span><strong>"Agent sessions are unavailable"</strong><small>{move || live.error.get().unwrap_or_else(|| "The native workspace snapshot failed its safety checks.".into())}</small></div>
+                </Show>
+                <Show when=move || matches!(live.phase.get(), LoadPhase::Empty | LoadPhase::Ready) && live.snapshot.get().is_some_and(|snapshot| snapshot.sessions.is_empty())>
+                    <div class="live-collection-empty"><span class="live-workspace-glyph"><Icon path=ICON_NODES /></span><strong>"No agent sessions yet"</strong><small>"Sync for All on Integrations imports Claude Code and Codex session metadata."</small></div>
+                </Show>
+                <div class="live-record-list">
+                    {move || live.snapshot.get().map(|snapshot| {
+                        fleet_session_groups(&snapshot.sessions).into_iter().map(|(label, tone, sessions)| {
+                            let count = sessions.len();
+                            view! {
+                                <section class="live-fleet-group">
+                                    <header class="live-fleet-group-header">
+                                        <span class=format!("state-label {tone}")>{label}</span>
+                                        <small>{count}</small>
+                                    </header>
+                                    {sessions.into_iter().map(|session| {
+                                        let session_id = session.id.clone();
+                                        let selected_id = session_id.clone();
+                                        let title = session_title(&snapshot, &session);
+                                        let detail = session_detail(&snapshot, &session, true);
+                                        let state = session.state.clone();
+                                        let row_tone = session_state_tone(&session.state);
+                                        view! {
+                                            <button
+                                                class=move || if live.selected_session_id.get().as_deref() == Some(selected_id.as_str()) { "live-record-row live-session-row is-selected" } else { "live-record-row live-session-row" }
+                                                type="button"
+                                                on:click=move |_| {
+                                                    actions.dispatch(WorkspaceAction::SelectSession(session_id.clone()));
+                                                    inspector_open.set(true);
+                                                    active_view.set(AppView::Workspace);
+                                                }
+                                            >
+                                                <span class="live-record-mark"><StatusDot tone=row_tone /></span>
+                                                <span><strong>{title}</strong><small>{detail}</small></span>
+                                                <span class=move || format!("state-label {row_tone}")>{state}</span>
+                                            </button>
+                                        }
+                                    }).collect_view()}
+                                    <Show when=move || count == 0 && label == "Running">
+                                        <div class="live-task-empty"><span>"No agents are running right now"</span></div>
+                                    </Show>
+                                </section>
+                            }
+                        }).collect_view()
+                    })}
+                </div>
+            </div>
+        </div>
+    }
+}
+
+fn fleet_subtitle(live: &LiveStatus) -> String {
+    let Some(snapshot) = live.snapshot.get() else {
+        return "Observed agent sessions".into();
+    };
+    let running = snapshot
+        .sessions
+        .iter()
+        .filter(|session| session_is_running(session))
+        .count();
+    format!("{running} running · {} observed", snapshot.sessions.len())
+}
+
+fn sort_sessions_for_display(sessions: &mut [crate::ipc::SessionRecord]) {
+    sessions.sort_by(|left, right| {
+        fleet_session_rank(&left.state)
+            .cmp(&fleet_session_rank(&right.state))
+            .then(
+                right
+                    .last_observed_at_unix_ms
+                    .unwrap_or(0)
+                    .cmp(&left.last_observed_at_unix_ms.unwrap_or(0)),
+            )
+    });
+}
+
+fn fleet_session_groups(
+    sessions: &[crate::ipc::SessionRecord],
+) -> Vec<(&'static str, &'static str, Vec<crate::ipc::SessionRecord>)> {
+    let mut running = Vec::new();
+    let mut waiting = Vec::new();
+    let mut problem = Vec::new();
+    let mut idle = Vec::new();
+    for session in sessions {
+        match session.state.as_str() {
+            "running" => running.push(session.clone()),
+            "waiting" => waiting.push(session.clone()),
+            "problem" => problem.push(session.clone()),
+            _ => idle.push(session.clone()),
+        }
+    }
+    sort_sessions_for_display(&mut running);
+    sort_sessions_for_display(&mut waiting);
+    sort_sessions_for_display(&mut problem);
+    sort_sessions_for_display(&mut idle);
+    if sessions.is_empty() {
+        return Vec::new();
+    }
+    let mut groups = vec![("Running", "healthy", running)];
+    if !waiting.is_empty() {
+        groups.push(("Waiting", "attention", waiting));
+    }
+    if !problem.is_empty() {
+        groups.push(("Problems", "problem", problem));
+    }
+    if !idle.is_empty() {
+        groups.push(("Idle", "quiet", idle));
+    }
+    groups
+}
+
+fn fleet_session_rank(state: &str) -> u8 {
+    match state {
+        "running" => 0,
+        "waiting" => 1,
+        "problem" => 2,
+        "idle" => 3,
+        _ => 4,
+    }
+}
+
+#[component]
 fn LiveCollectionContext(kind: &'static str) -> impl IntoView {
     let live = expect_context::<LiveStatus>();
+    let actions = expect_context::<WorkspaceActionSink>();
     let (title, _, empty_title, _) = live_collection_copy(kind);
     view! {
         <div class="context-section live-context-section">
-            <div class="section-label"><span>{title}</span><span class="count">{move || live_collection_rows(&live, kind).len()}</span></div>
-            {move || live_collection_rows(&live, kind).into_iter().take(8).map(|(name, detail, _)| view! {
-                <div class="context-row live-context-row"><StatusDot tone="quiet" /><span class="row-copy"><strong>{name}</strong><small>{detail}</small></span></div>
-            }).collect_view()}
-            <Show when=move || live_collection_rows(&live, kind).is_empty()>
-                <div class="context-empty"><p>{empty_title}</p><span>"The native store returned no records."</span></div>
-            </Show>
+            {move || {
+                let rows = if kind == "fleet" {
+                    live_collection_rows(&live, kind)
+                        .into_iter()
+                        .filter(|(_, _, _, state)| {
+                            matches!(state.as_str(), "running" | "waiting" | "problem")
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    live_collection_rows(&live, kind)
+                };
+                let count = rows.len();
+                let empty = rows.is_empty();
+                view! {
+                    <>
+                        <div class="section-label"><span>{title}</span><span class="count">{count}</span></div>
+                        {rows.into_iter().map(|(id, name, detail, state)| {
+                            let select_id = id.clone();
+                            let selected_id = id.clone();
+                            let tone = session_state_tone(&state);
+                            view! {
+                                <button
+                                    class=move || {
+                                        let selected = if kind == "projects" {
+                                            live.selected_project_id.get()
+                                        } else {
+                                            live.selected_session_id.get()
+                                        };
+                                        if selected.as_deref() == Some(selected_id.as_str()) {
+                                            "context-row live-context-row is-selected"
+                                        } else {
+                                            "context-row live-context-row"
+                                        }
+                                    }
+                                    type="button"
+                                    on:click=move |_| {
+                                        if kind == "projects" {
+                                            actions.dispatch(WorkspaceAction::SelectProject(select_id.clone()));
+                                        } else if kind == "fleet" {
+                                            actions.dispatch(WorkspaceAction::SelectSession(select_id.clone()));
+                                        }
+                                    }
+                                >
+                                    <StatusDot tone /><span class="row-copy"><strong>{name}</strong><small>{detail}</small></span>
+                                </button>
+                            }
+                        }).collect_view()}
+                        <Show when=move || empty>
+                            <div class="context-empty"><p>{empty_title}</p><span>"The native store returned no records."</span></div>
+                        </Show>
+                    </>
+                }
+            }}
         </div>
     }
 }
@@ -855,6 +1103,73 @@ fn LiveCollectionInspector(kind: &'static str, inspector_open: RwSignal<bool>) -
     view! {
         <div class="inspector-content">
             <header class="inspector-header simple-inspector-header"><div><h2>{title}</h2><p>"Native local records"</p></div><button class="icon-button" type="button" aria-label="Close details" on:click=move |_| inspector_open.set(false)><Icon path=crate::components::ICON_CLOSE /></button></header>
+            <Show when=move || kind == "fleet" || kind == "projects">
+                {move || live.snapshot.get().and_then(|snapshot| {
+                    if kind == "projects" {
+                        let project_id = live.selected_project_id.get()?;
+                        let project = snapshot.projects.iter().find(|project| project.id == project_id)?.clone();
+                        let mut sessions = snapshot
+                            .sessions
+                            .iter()
+                            .filter(|session| session.project_id == project_id)
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        sort_sessions_for_display(&mut sessions);
+                        let root = project.root_path.clone().unwrap_or_else(|| "No local root recorded".into());
+                        return Some(view! {
+                            <>
+                            <section class="inspector-section">
+                                <h3>"Selected project"</h3>
+                                <dl class="detail-list">
+                                    <div><dt>"Name"</dt><dd>{project.name.clone()}</dd></div>
+                                    <div><dt>"Root"</dt><dd>{root}</dd></div>
+                                    <div><dt>"State"</dt><dd>{project.state.clone()}</dd></div>
+                                    <div><dt>"Sessions"</dt><dd>{sessions.len()}</dd></div>
+                                </dl>
+                            </section>
+                            <section class="inspector-section">
+                                <h3>"Sessions"</h3>
+                                {if sessions.is_empty() {
+                                    view! { <p class="inspector-note">"No session metadata is stored for this project yet."</p> }.into_any()
+                                } else {
+                                    view! {
+                                        <dl class="detail-list">
+                                            {sessions.into_iter().map(|session| {
+                                                let title = session_title(&snapshot, &session);
+                                                let detail = session_detail(&snapshot, &session, false);
+                                                view! {
+                                                    <div><dt>{title}</dt><dd>{detail}" · "{session.state}</dd></div>
+                                                }
+                                            }).collect_view()}
+                                        </dl>
+                                    }.into_any()
+                                }}
+                            </section>
+                            </>
+                        }.into_any());
+                    }
+                    let session_id = live.selected_session_id.get()?;
+                    let session = snapshot.sessions.iter().find(|session| session.id == session_id)?.clone();
+                    let title = session_title(&snapshot, &session);
+                    let agent = snapshot.agents.iter().find(|agent| agent.id == session.agent_id).map(|agent| agent.display_name.clone()).unwrap_or_else(|| session.agent_id.clone());
+                    let project = snapshot.projects.iter().find(|project| project.id == session.project_id).map(|project| project.name.clone()).unwrap_or_else(|| session.project_id.clone());
+                    let observed = relative_unix_ms(snapshot.generated_at_unix_ms, session.last_observed_at_unix_ms);
+                    let provider = session.provider_session_id.clone().unwrap_or_else(|| "Not recorded".into());
+                    Some(view! {
+                        <section class="inspector-section">
+                            <h3>"Selected session"</h3>
+                            <dl class="detail-list">
+                                <div><dt>"Title"</dt><dd>{title}</dd></div>
+                                <div><dt>"Agent"</dt><dd>{agent}</dd></div>
+                                <div><dt>"Project"</dt><dd>{project}</dd></div>
+                                <div><dt>"State"</dt><dd>{session.state.clone()}</dd></div>
+                                <div><dt>"Last observed"</dt><dd>{observed}</dd></div>
+                                <div><dt>"Provider session"</dt><dd>{provider}</dd></div>
+                            </dl>
+                        </section>
+                    }.into_any())
+                })}
+            </Show>
             <section class="inspector-section"><h3>"Source boundary"</h3><p class="inspector-note">"This panel reflects the persisted owner-device snapshot. Provider activity appears only after a connector reports and Utu stores it."</p></section>
             <section class="inspector-section"><h3>"Store"</h3><dl class="detail-list"><div><dt>"Records"</dt><dd>{move || live_collection_rows(&live, kind).len()}</dd></div><div><dt>"Integrity"</dt><dd>{move || live.snapshot.get().map(|snapshot| if snapshot.store.integrity_ok { "Healthy" } else { "Needs attention" }).unwrap_or("Unavailable")}</dd></div><div><dt>"Schema"</dt><dd>{move || live.snapshot.get().map(|snapshot| snapshot.store.schema_version.to_string()).unwrap_or_else(|| "—".into())}</dd></div></dl></section>
         </div>
@@ -877,14 +1192,14 @@ fn live_collection_copy(kind: &str) -> (&'static str, &'static str, &'static str
         ),
         _ => (
             "Fleet",
-            "Agents and capabilities recorded locally",
-            "No local agents",
-            "Run connector checks to discover tools. Agents appear only when a connector produces a stored record.",
+            "Running and observed agent sessions",
+            "No agent sessions",
+            "Sync for All imports Claude Code and Codex session metadata. Running sessions appear first.",
         ),
     }
 }
 
-fn live_collection_rows(live: &LiveStatus, kind: &str) -> Vec<(String, String, String)> {
+fn live_collection_rows(live: &LiveStatus, kind: &str) -> Vec<(String, String, String, String)> {
     let Some(snapshot) = live.snapshot.get() else {
         return Vec::new();
     };
@@ -895,6 +1210,7 @@ fn live_collection_rows(live: &LiveStatus, kind: &str) -> Vec<(String, String, S
             .map(|item| {
                 (
                     item.title.clone(),
+                    item.title.clone(),
                     "Stored attention item".into(),
                     item.severity.clone(),
                 )
@@ -904,34 +1220,40 @@ fn live_collection_rows(live: &LiveStatus, kind: &str) -> Vec<(String, String, S
             .projects
             .iter()
             .map(|project| {
+                let sessions = snapshot
+                    .sessions
+                    .iter()
+                    .filter(|session| session.project_id == project.id)
+                    .count();
                 (
+                    project.id.clone(),
                     project.name.clone(),
-                    project
-                        .root_path
-                        .clone()
-                        .unwrap_or_else(|| "No root path".into()),
+                    format!(
+                        "{sessions} sessions · {}",
+                        project
+                            .root_path
+                            .clone()
+                            .unwrap_or_else(|| "No root path".into())
+                    ),
                     project.state.clone(),
                 )
             })
             .collect(),
-        _ => snapshot
-            .agents
-            .iter()
-            .map(|agent| {
-                (
-                    agent.display_name.clone(),
-                    agent
-                        .model
-                        .clone()
-                        .unwrap_or_else(|| agent.connector_id.clone()),
-                    if agent.capabilities.direct {
-                        "Direct".into()
-                    } else {
-                        "Observe".into()
-                    },
-                )
-            })
-            .collect(),
+        _ => {
+            let mut sessions = snapshot.sessions.clone();
+            sort_sessions_for_display(&mut sessions);
+            sessions
+                .iter()
+                .map(|session| {
+                    (
+                        session.id.clone(),
+                        session_title(&snapshot, session),
+                        session_detail(&snapshot, session, true),
+                        session.state.clone(),
+                    )
+                })
+                .collect()
+        }
     }
 }
 
@@ -1058,22 +1380,32 @@ fn WorkspaceContext(read_only: bool) -> impl IntoView {
             </Show>
         </div>
         <div class="context-section session-context">
-            <div class="section-label"><span>"Sessions"</span><button class="bare-plus" type="button" disabled=read_only || live.is_desktop() title=if live.is_desktop() { "Session creation is not wired yet" } else { "New session" } aria-label="New session">"+"</button></div>
+            <div class="section-label"><span>"Sessions"</span><span class="count">{move || {
+                let selected = live.selected_project_id.get();
+                live.snapshot.get().map(|snapshot| {
+                    snapshot.sessions.iter().filter(|session| selected.as_deref() == Some(session.project_id.as_str())).count()
+                }).unwrap_or_default()
+            }}</span></div>
             <Show when=move || live.snapshot.get().is_some()>
                 {move || live.snapshot.get().map(|snapshot| {
                     let selected_project = live.selected_project_id.get();
-                    snapshot.sessions.iter().filter(move |session| selected_project.as_deref() == Some(session.project_id.as_str())).map(|session| {
+                    let mut sessions = snapshot.sessions.iter().filter(|session| selected_project.as_deref() == Some(session.project_id.as_str())).cloned().collect::<Vec<_>>();
+                    sort_sessions_for_display(&mut sessions);
+                    if sessions.is_empty() {
+                        return view! { <div class="context-empty"><p>"No sessions"</p><span>"Sync this project to import Claude Code and Codex metadata."</span></div> }.into_any();
+                    }
+                    sessions.into_iter().map(|session| {
                     let session_id = session.id.clone();
                     let session_id_action = session_id.clone();
-                    let agent = snapshot.agents.iter().find(|agent| agent.id == session.agent_id).map(|agent| agent.display_name.clone()).unwrap_or_else(|| "Unknown agent".into());
-                    let task = session.task_id.as_deref().and_then(|task_id| snapshot.tasks.iter().find(|task| task.id == task_id)).map(|task| task.title.clone()).unwrap_or_else(|| "Untitled session".into());
-                    let tone = if snapshot.session_can_receive_direction(&session.id) { "healthy" } else { "attention" };
+                    let title = session_title(&snapshot, &session);
+                    let detail = session_detail(&snapshot, &session, false);
+                    let tone = session_state_tone(&session.state);
                     view! {
                         <button class=move || if live.selected_session_id.get().as_deref() == Some(session_id.as_str()) { "session-context-row is-selected" } else { "session-context-row" } type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SelectSession(session_id_action.clone()))>
-                            <span class="session-state"><StatusDot tone /></span><span><strong>{task}</strong><small>{agent}" · "{session.state.clone()}</small></span>
+                            <span class="session-state"><StatusDot tone /></span><span><strong>{title}</strong><small>{detail}" · "{session.state.clone()}</small></span>
                         </button>
                     }
-                }).collect_view()})}
+                }).collect_view().into_any()})}
             </Show>
             <Show when=move || !live.is_desktop()>
             {model.sessions.iter().copied().map(|session| {
