@@ -807,11 +807,12 @@ impl Store {
         ensure_session_dependents_match_scope(&transaction, session)?;
         transaction.execute(
             "INSERT INTO sessions (id, project_id, task_id, agent_id, provider_session_id, state, \
-                 started_at_unix_ms, last_observed_at_unix_ms, title_hint) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
+                 started_at_unix_ms, last_observed_at_unix_ms, title_hint) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
              ON CONFLICT(id) DO UPDATE SET project_id=excluded.project_id, task_id=excluded.task_id, \
                  agent_id=excluded.agent_id, provider_session_id=excluded.provider_session_id, \
                  state=excluded.state, last_observed_at_unix_ms=excluded.last_observed_at_unix_ms, \
-                 title_hint=COALESCE(excluded.title_hint, title_hint)",
+                 title_hint=COALESCE(excluded.title_hint, sessions.title_hint)",
             params![
                 session.id,
                 session.project_id,
@@ -821,7 +822,7 @@ impl Store {
                 session.state.db_value(),
                 started_at,
                 last_observed,
-                session.title_hint
+                session.title_hint,
             ],
         )?;
         transaction.commit()?;

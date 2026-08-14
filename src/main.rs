@@ -4,6 +4,7 @@ mod components;
 #[cfg(test)]
 mod demo;
 mod ipc;
+mod markdown;
 mod views;
 mod workspace_data;
 

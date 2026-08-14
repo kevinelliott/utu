@@ -4,9 +4,13 @@ use crate::{
     components::{
         AgentAvatar, EvidenceTag, ICON_BRANCH, ICON_CHECK, ICON_CHEVRON_RIGHT, ICON_CLOSE,
         ICON_FILE, ICON_FOLDER, ICON_LOCK, ICON_MORE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP,
-        ICON_TERMINAL, Icon, StatusDot, WorkspaceNav,
+        ICON_TERMINAL, Icon, StatusDot, VirtualList,
     },
-    workspace_data::{LiveStatus, LoadPhase, WorkspaceAction, WorkspaceActionSink, WorkspaceModel},
+    markdown::render_markdown,
+    workspace_data::{
+        relative_unix_ms, session_detail, session_state_tone, session_title, LiveStatus, LoadPhase,
+        WorkspaceAction, WorkspaceActionSink, WorkspaceModel,
+    },
 };
 
 #[component]
@@ -20,98 +24,281 @@ pub fn LiveWorkspaceView(
     let create_actions = actions;
 
     view! {
-        <div class="workspace-layout conversation-layout live-workspace-layout">
-            <header class="workspace-toolbar conversation-toolbar">
-                <div class="toolbar-leading">
-                    <WorkspaceNav />
-                    <div class="conversation-heading">
-                        <h1>{move || live.active_project_name().unwrap_or_else(|| "Local workspace".into())}<span class=move || format!("live-status state-{}", live_phase_name(live.phase.get()))><span class=move || format!("status-dot status-{}", live_phase_tone(live.phase.get())) aria-hidden="true"></span>{move || live.phase.get().label()}</span></h1>
-                        <p>{move || live_session_label(&live)}</p>
+        <div class="live-workspace-split">
+            <WorkspaceSessionsPane />
+            <div class="workspace-layout live-workspace-layout">
+                <header class="workspace-toolbar conversation-toolbar">
+                    <div class="toolbar-leading">
+                        <div class="conversation-heading">
+                            <h1>{move || live.active_project_name().unwrap_or_else(|| "Local workspace".into())}<span class=move || format!("live-status state-{}", live_phase_name(live.phase.get()))><span class=move || format!("status-dot status-{}", live_phase_tone(live.phase.get())) aria-hidden="true"></span>{move || live.phase.get().label()}</span></h1>
+                            <p>{move || live_session_label(&live)}</p>
+                        </div>
                     </div>
-                </div>
-                <div class="toolbar-actions conversation-actions">
-                    <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)><Icon path=ICON_FOLDER />"Files"</button>
-                    <Show when=move || live.selected_project_id.get().is_some()>
-                        <button class="secondary-button" type="button" disabled=move || live.session_syncing.get() on:click=move |_| {
-                            if let Some(project_id) = live.selected_project_id.get_untracked() {
-                                actions.dispatch(WorkspaceAction::SyncProjectSessions { project_id: Some(project_id) });
-                            }
-                        }>{move || if live.session_syncing.get() { "Syncing sessions…" } else { "Sync sessions" }}</button>
-                    </Show>
-                    <button class="icon-button" type="button" aria-label="Workspace actions" title="Workspace actions"><Icon path=ICON_MORE /></button>
-                </div>
-            </header>
-
-            <div class="session-context-bar live-session-context">
-                <span><span class=move || format!("status-dot status-{}", live_phase_tone(live.phase.get())) aria-hidden="true"></span>"Local data from the Utu store"</span>
-                <span class="session-context-path"><Icon path=ICON_SHIELD />"Provider-neutral · owner device"</span>
-            </div>
-
-            <div class=move || if live.phase.get() == LoadPhase::Ready && live.session_stream.get().is_some_and(|stream| !stream.messages.is_empty()) { "live-workspace-state is-hidden" } else { "live-workspace-state" } role="status">
-                <Show when=move || live.phase.get() == LoadPhase::Loading>
-                    <span class="spinner live-workspace-spinner"></span>
-                    <h2>"Opening your local workspace"</h2>
-                    <p>"Reading projects, sessions, agents, and connector state from the owner device."</p>
-                </Show>
-                <Show when=move || live.phase.get() == LoadPhase::Empty>
-                    <span class="live-workspace-glyph"><Icon path=ICON_FOLDER /></span>
-                    <h2>"Your local workspace is ready"</h2>
-                    <p>"No projects or agent sessions are stored yet. Add a local folder boundary, then create tasks and connect agents when you are ready."</p>
-                    <div class="live-empty-actions">
-                        <button class="primary-button" type="button" on:click=move |_| create_actions.dispatch(WorkspaceAction::OpenCreateProject)><Icon path=ICON_PLUS />"Add project"</button>
-                        <button class="secondary-button" type="button" on:click=move |_| refresh_actions.dispatch(WorkspaceAction::RefreshConnector("all connectors".into()))>"Run connector checks"</button>
-                    </div>
-                    <small>"No sample project or provider output is shown as live data."</small>
-                </Show>
-                <Show when=move || live.phase.get() == LoadPhase::Error>
-                    <span class="live-workspace-glyph is-problem"><Icon path=ICON_STOP /></span>
-                    <h2>"Utu could not open the local workspace"</h2>
-                    <p>{move || live.error.get().unwrap_or_else(|| "The native command bridge did not return workspace state.".into())}</p>
-                    <button class="secondary-button" type="button" on:click=move |_| live.start()>"Try again"</button>
-                </Show>
-                <Show when=move || live.phase.get() == LoadPhase::Ready && live.stream_loading.get()>
-                    <span class="spinner live-workspace-spinner"></span>
-                    <h2>"Loading the stored conversation"</h2>
-                    <p>"Messages and normalized activity are read from one coherent native session projection."</p>
-                </Show>
-                <Show when=move || live.phase.get() == LoadPhase::Ready && !live.stream_loading.get() && live.session_stream.get().is_none_or(|stream| stream.messages.is_empty())>
-                    <span class="live-workspace-glyph"><Icon path=ICON_TERMINAL /></span>
-                    <h2>{move || if live.recordable_session_id().is_some() { "Stored session selected" } else { "No eligible stored session" }}</h2>
-                    <p>{move || {
-                        if live.selected_session_can_deliver() {
-                            "This Codex session can receive an explicitly armed direction. Utu requests provider read-only/no-network policy, does not independently verify enforcement, and never treats acknowledgement as completion."
-                        } else if live.recordable_session_id().is_some() {
-                            "Utu can record an owner direction locally. This session has no active provider delivery capability."
-                        } else if live.selected_session_id.get().is_some() {
-                            "A stored session was found but its connector is not eligible for owner direction. Review connector evidence in Integrations and re-run checks to attach an active control transport."
-                        } else {
-                            "No stored sessions for this project. Utu watches ready agents after the first sync, or you can import session metadata now."
-                        }
-                    }}</p>
-                    <div class="live-empty-actions">
-                        <Show when=move || live.recordable_session_id().is_none() && live.selected_project_id.get().is_some()>
+                    <div class="toolbar-actions conversation-actions">
+                        <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)><Icon path=ICON_FOLDER />"Files"</button>
+                        <Show when=move || live.selected_project_id.get().is_some()>
                             <button class="secondary-button" type="button" disabled=move || live.session_syncing.get() on:click=move |_| {
                                 if let Some(project_id) = live.selected_project_id.get_untracked() {
                                     actions.dispatch(WorkspaceAction::SyncProjectSessions { project_id: Some(project_id) });
                                 }
                             }>{move || if live.session_syncing.get() { "Syncing sessions…" } else { "Sync sessions" }}</button>
                         </Show>
-                        <Show when=move || live.recordable_session_id().is_none()>
-                            <button class="secondary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::RefreshConnector("all connectors".into()))>"Run connector checks"</button>
-                        </Show>
-                        <button class="text-button" type="button" on:click=move |_| on_review_evidence.run(())>"Review capability evidence"</button>
+                        <button class="icon-button" type="button" aria-label="Workspace actions" title="Workspace actions"><Icon path=ICON_MORE /></button>
                     </div>
+                </header>
+
+                <div class="session-context-bar live-session-context">
+                    <span><span class=move || format!("status-dot status-{}", live_phase_tone(live.phase.get())) aria-hidden="true"></span>"Local data from the Utu store"</span>
+                    <span class="session-context-path"><Icon path=ICON_SHIELD />"Provider-neutral · owner device"</span>
+                </div>
+
+                // Metadata slot — always a DOM node so grid row 3 stays deterministic.
+                // Renders content only when a session is selected.
+                <div class="live-session-metadata-slot">
+                    {move || {
+                        let snapshot = live.snapshot.get()?;
+                        let session_id = live.selected_session_id.get()?;
+                        let session = snapshot.sessions.iter().find(|s| s.id == session_id)?.clone();
+                        let title = session_title(&snapshot, &session);
+                        let agent_name = snapshot.agents.iter()
+                            .find(|a| a.id == session.agent_id)
+                            .map(|a| a.display_name.clone())
+                            .unwrap_or_else(|| session.agent_id.clone());
+                        let project_name = snapshot.projects.iter()
+                            .find(|p| p.id == session.project_id)
+                            .map(|p| p.name.clone())
+                            .unwrap_or_else(|| session.project_id.clone());
+                        let state = session.state.clone();
+                        let tone = session_state_tone(&session.state);
+                        let observed = relative_unix_ms(snapshot.generated_at_unix_ms, session.last_observed_at_unix_ms);
+                        let started = if session.started_at_unix_ms > 0 {
+                            relative_unix_ms(snapshot.generated_at_unix_ms, Some(session.started_at_unix_ms))
+                        } else {
+                            "—".into()
+                        };
+                        let provider = session.provider_session_id.clone().unwrap_or_else(|| "—".into());
+                        Some(view! {
+                            <div class="live-session-metadata-card">
+                                <div class="live-session-metadata-header">
+                                    <StatusDot tone />
+                                    <strong>{title}</strong>
+                                    <span class=format!("state-label {tone}")>{state}</span>
+                                </div>
+                                <dl class="session-metadata-fields">
+                                    <div><dt>"Agent"</dt><dd>{agent_name}</dd></div>
+                                    <div><dt>"Project"</dt><dd>{project_name}</dd></div>
+                                    <div><dt>"Observed"</dt><dd>{observed}</dd></div>
+                                    <div><dt>"Started"</dt><dd>{started}</dd></div>
+                                    <div><dt>"Provider session"</dt><dd>{provider}</dd></div>
+                                </dl>
+                            </div>
+                        })
+                    }}
+                </div>
+
+                <div class=move || if live.phase.get() == LoadPhase::Ready && live.session_stream.get().is_some_and(|stream| !stream.messages.is_empty()) { "live-workspace-state is-hidden" } else { "live-workspace-state" } role="status">
+                    <Show when=move || live.phase.get() == LoadPhase::Loading>
+                        <span class="spinner live-workspace-spinner"></span>
+                        <h2>"Opening your local workspace"</h2>
+                        <p>"Reading projects, sessions, agents, and connector state from the owner device."</p>
+                    </Show>
+                    <Show when=move || live.phase.get() == LoadPhase::Empty>
+                        <span class="live-workspace-glyph"><Icon path=ICON_FOLDER /></span>
+                        <h2>"Your local workspace is ready"</h2>
+                        <p>"No projects or agent sessions are stored yet. Add a local folder boundary, then create tasks and connect agents when you are ready."</p>
+                        <div class="live-empty-actions">
+                            <button class="primary-button" type="button" on:click=move |_| create_actions.dispatch(WorkspaceAction::OpenCreateProject)><Icon path=ICON_PLUS />"Add project"</button>
+                            <button class="secondary-button" type="button" on:click=move |_| refresh_actions.dispatch(WorkspaceAction::RefreshConnector("all connectors".into()))>"Run connector checks"</button>
+                        </div>
+                        <small>"No sample project or provider output is shown as live data."</small>
+                    </Show>
+                    <Show when=move || live.phase.get() == LoadPhase::Error>
+                        <span class="live-workspace-glyph is-problem"><Icon path=ICON_STOP /></span>
+                        <h2>"Utu could not open the local workspace"</h2>
+                        <p>{move || live.error.get().unwrap_or_else(|| "The native command bridge did not return workspace state.".into())}</p>
+                        <button class="secondary-button" type="button" on:click=move |_| live.start()>"Try again"</button>
+                    </Show>
+                    <Show when=move || live.phase.get() == LoadPhase::Ready && live.stream_loading.get()>
+                        <span class="spinner live-workspace-spinner"></span>
+                        <h2>"Loading the stored conversation"</h2>
+                        <p>"Messages and normalized activity are read from one coherent native session projection."</p>
+                    </Show>
+                    <Show when=move || live.phase.get() == LoadPhase::Ready && !live.stream_loading.get() && live.session_stream.get().is_none_or(|stream| stream.messages.is_empty())>
+                        <span class="live-workspace-glyph"><Icon path=ICON_TERMINAL /></span>
+                        <h2>{move || {
+                            if live.selected_session_id.get().is_some() {
+                                "No transcript imported"
+                            } else if live.recordable_session_id().is_some() {
+                                "Stored session selected"
+                            } else {
+                                "No eligible stored session"
+                            }
+                        }}</h2>
+                        <p>{move || {
+                            if live.selected_session_id.get().is_some() && live.recordable_session_id().is_none() {
+                                "Session metadata is stored above. No transcript has been imported for this session."
+                            } else if live.selected_session_can_deliver() {
+                                "This Codex session can receive an explicitly armed direction. Utu requests provider read-only/no-network policy, does not independently verify enforcement, and never treats acknowledgement as completion."
+                            } else if live.recordable_session_id().is_some() {
+                                "Utu can record an owner direction locally. This session has no active provider delivery capability."
+                            } else if live.selected_session_id.get().is_some() {
+                                "A stored session was found but its connector is not eligible for owner direction. Review connector evidence in Integrations and re-run checks to attach an active control transport."
+                            } else {
+                                "Select a session in the middle panel, or sync sessions to import metadata."
+                            }
+                        }}</p>
+                        <div class="live-empty-actions">
+                            <Show when=move || live.recordable_session_id().is_none() && live.selected_project_id.get().is_some()>
+                                <button class="secondary-button" type="button" disabled=move || live.session_syncing.get() on:click=move |_| {
+                                    if let Some(project_id) = live.selected_project_id.get_untracked() {
+                                        actions.dispatch(WorkspaceAction::SyncProjectSessions { project_id: Some(project_id) });
+                                    }
+                                }>{move || if live.session_syncing.get() { "Syncing sessions…" } else { "Sync sessions" }}</button>
+                            </Show>
+                            <Show when=move || live.recordable_session_id().is_none()>
+                                <button class="secondary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::RefreshConnector("all connectors".into()))>"Run connector checks"</button>
+                            </Show>
+                            <button class="text-button" type="button" on:click=move |_| on_review_evidence.run(())>"Review capability evidence"</button>
+                        </div>
+                    </Show>
+                </div>
+
+                <Show when=move || live.phase.get() == LoadPhase::Ready && live.session_stream.get().is_some_and(|stream| !stream.messages.is_empty())>
+                    <LiveConversationStream />
+                </Show>
+
+                <Show when=move || live.phase.get() == LoadPhase::Ready>
+                    <LiveDirectionComposer />
                 </Show>
             </div>
-
-            <Show when=move || live.phase.get() == LoadPhase::Ready && live.session_stream.get().is_some_and(|stream| !stream.messages.is_empty())>
-                <LiveConversationStream />
-            </Show>
-
-            <Show when=move || live.phase.get() == LoadPhase::Ready>
-                <LiveDirectionComposer />
-            </Show>
         </div>
+    }
+}
+
+#[component]
+fn WorkspaceSessionsPane() -> impl IntoView {
+    let live = expect_context::<LiveStatus>();
+    let actions = expect_context::<WorkspaceActionSink>();
+
+    // Pre-sort and pre-compute titles once per snapshot/project change (not on every scroll).
+    #[derive(Clone)]
+    struct Row {        id: String,
+        title: String,
+        detail: String,
+        state: String,
+        tone: &'static str,
+    }
+
+    let sorted_sessions = Signal::derive(move || {
+        let Some(snapshot) = live.snapshot.get() else { return vec![] };
+        let Some(project_id) = live.selected_project_id.get() else { return vec![] };
+        let mut rows: Vec<Row> = snapshot
+            .sessions
+            .iter()
+            .filter(|s| s.project_id == project_id)
+            .map(|session| Row {
+                id: session.id.clone(),
+                title: session_title(&snapshot, session),
+                detail: session_detail(&snapshot, session, false),
+                state: session.state.clone(),
+                tone: session_state_tone(&session.state),
+            })
+            .collect();
+        rows.sort_by(|a, b| {
+            workspace_session_rank(&a.state)
+                .cmp(&workspace_session_rank(&b.state))
+                .then(b.state.cmp(&a.state))
+        });
+        rows
+    });
+
+    view! {
+        <div class="workspace-sessions-pane">
+            <div class="workspace-sessions-header">
+                <span class="workspace-sessions-title">
+                    {move || {
+                        live.snapshot.get()
+                            .and_then(|snapshot| {
+                                live.selected_project_id.get().and_then(|project_id| {
+                                    snapshot.projects.iter()
+                                        .find(|p| p.id == project_id)
+                                        .map(|p| p.name.clone())
+                                })
+                            })
+                            .unwrap_or_else(|| "Sessions".into())
+                    }}
+                </span>
+                <span class="count">
+                    {move || {
+                        let n = sorted_sessions.get().len();
+                        if n > 0 { n.to_string() } else { String::new() }
+                    }}
+                </span>
+            </div>
+            <div class="workspace-sessions-list">
+                {move || {
+                    if live.snapshot.get().is_none() {
+                        return view! {
+                            <div class="workspace-sessions-empty">
+                                <span>"Loading…"</span>
+                            </div>
+                        }.into_any();
+                    }
+                    if live.selected_project_id.get().is_none() {
+                        return view! {
+                            <div class="workspace-sessions-empty">
+                                <strong>"Select a project"</strong>
+                                <span>"Click a project on the left to see its sessions."</span>
+                            </div>
+                        }.into_any();
+                    }
+                    if sorted_sessions.get().is_empty() {
+                        return view! {
+                            <div class="workspace-sessions-empty">
+                                <strong>"No sessions"</strong>
+                                <span>"No sessions stored for this project. Sync to import metadata."</span>
+                            </div>
+                        }.into_any();
+                    }
+                    view! {
+                        <VirtualList
+                            items=move || sorted_sessions.get()
+                            row_height=52.0
+                            render_item=move |row: Row| {
+                                let session_id = row.id.clone();
+                                let selected_id = row.id.clone();
+                                view! {
+                                    <button
+                                        class=move || if live.selected_session_id.get().as_deref() == Some(selected_id.as_str()) {
+                                            "session-context-row is-selected"
+                                        } else {
+                                            "session-context-row"
+                                        }
+                                        type="button"
+                                        on:click=move |_| actions.dispatch(WorkspaceAction::SelectSession(session_id.clone()))
+                                    >
+                                        <span class="session-state"><StatusDot tone=row.tone /></span>
+                                        <span>
+                                            <strong>{row.title}</strong>
+                                            <small>{row.detail}" · "{row.state}</small>
+                                        </span>
+                                    </button>
+                                }
+                            }
+                        />
+                    }.into_any()
+                }}
+            </div>
+        </div>
+    }
+}
+
+fn workspace_session_rank(state: &str) -> u8 {
+    match state {
+        "running" => 0,
+        "waiting" => 1,
+        "problem" => 2,
+        _ => 3,
     }
 }
 
@@ -138,12 +325,13 @@ fn LiveConversationStream() -> impl IntoView {
                     };
                     let evidence = message.evidence.clone();
                     let source = message.source.clone();
+                    let body_html = render_markdown(&message.body);
                     view! {
                         <article class=turn_class data-message-id=message.id>
                             <div class=avatar_class aria-hidden="true">{avatar}</div>
                             <div class="turn-content">
                                 <div class="turn-meta"><strong>{author}</strong><span>{format!("Message {}", message.sequence)}</span><span class="live-evidence-chip">{evidence}</span></div>
-                                <p>{message.body}</p>
+                                <div class="turn-body markdown-body" inner_html=body_html></div>
                                 <small class="live-record-source">{source}</small>
                             </div>
                         </article>
@@ -182,6 +370,10 @@ fn LiveDirectionComposer() -> impl IntoView {
     });
     let submit = move |event: leptos::ev::SubmitEvent| {
         event.prevent_default();
+        // Externally-observed sessions must never receive any direction.
+        if live.selected_session_is_externally_observed() {
+            return;
+        }
         let project_id = live.selected_project_id.get_untracked();
         let session_id = live.recordable_session_id();
         if project_id.is_some() && session_id.is_some() && !draft.get_untracked().trim().is_empty()
@@ -199,17 +391,29 @@ fn LiveDirectionComposer() -> impl IntoView {
     };
 
     view! {
-        <form class="workspace-composer live-direction-composer" on:submit=submit>
-            <label class="sr-only" for="live-workspace-direction">"Direct the selected session"</label>
-            <textarea id="live-workspace-direction" rows="2" placeholder=move || if live.selected_session_can_deliver() { "Write a direction for Codex…" } else if live.recordable_session_id().is_some() { "Record an owner direction locally…" } else { "Select a stored session to record owner intent" } prop:value=move || draft.get() on:input=move |event| draft.set(event_target_value(&event))></textarea>
-            <div class="live-direction-toolbar">
-                <span class="live-direction-target"><span class=move || if live.recordable_session_id().is_some() { "status-dot status-attention" } else { "status-dot status-quiet" } aria-hidden="true"></span>{move || live_direction_target(&live)}</span>
-                <Show when=move || live.selected_session_can_deliver()>
-                    <label class="live-delivery-arm"><input type="checkbox" prop:checked=move || deliver_live.get() on:change=move |_| deliver_live.update(|armed| *armed = !*armed) /><span>"Send live · request read-only/no-network"</span></label>
-                </Show>
-                <button class="send-button" type="submit" disabled=move || live.recordable_session_id().is_none() || draft.get().trim().is_empty() || (live.selected_session_can_deliver() && !deliver_live.get()) aria-label=move || if live.selected_session_can_deliver() { "Send explicitly armed direction to Codex" } else { "Record direction in selected local session" }><Icon path=ICON_SEND /></button>
+        // Observe-only notice: shown instead of the composer for sessions that
+        // were imported from external agent files and are running outside Utu.
+        <Show
+            when=move || live.selected_session_is_externally_observed()
+            fallback=move || view! {
+                <form class="workspace-composer live-direction-composer" on:submit=submit>
+                    <label class="sr-only" for="live-workspace-direction">"Direct the selected session"</label>
+                    <textarea id="live-workspace-direction" rows="2" placeholder=move || if live.selected_session_can_deliver() { "Write a direction for Codex…" } else if live.recordable_session_id().is_some() { "Record an owner direction locally…" } else { "Select a stored session to record owner intent" } prop:value=move || draft.get() on:input=move |event| draft.set(event_target_value(&event))></textarea>
+                    <div class="live-direction-toolbar">
+                        <span class="live-direction-target"><span class=move || if live.recordable_session_id().is_some() { "status-dot status-attention" } else { "status-dot status-quiet" } aria-hidden="true"></span>{move || live_direction_target(&live)}</span>
+                        <Show when=move || live.selected_session_can_deliver()>
+                            <label class="live-delivery-arm"><input type="checkbox" prop:checked=move || deliver_live.get() on:change=move |_| deliver_live.update(|armed| *armed = !*armed) /><span>"Send live · request read-only/no-network"</span></label>
+                        </Show>
+                        <button class="send-button" type="submit" disabled=move || live.recordable_session_id().is_none() || draft.get().trim().is_empty() || (live.selected_session_can_deliver() && !deliver_live.get()) aria-label=move || if live.selected_session_can_deliver() { "Send explicitly armed direction to Codex" } else { "Record direction in selected local session" }><Icon path=ICON_SEND /></button>
+                    </div>
+                </form>
+            }
+        >
+            <div class="observe-only-notice" role="status" aria-label="Observe-only session">
+                <Icon path=ICON_SHIELD />
+                <span>"This session is running outside Utu and is observe-only."</span>
             </div>
-        </form>
+        </Show>
     }
 }
 
@@ -304,7 +508,6 @@ pub fn WorkspaceView(
         <div class="workspace-layout conversation-layout">
             <header class="workspace-toolbar conversation-toolbar">
                 <div class="toolbar-leading">
-                    <WorkspaceNav />
                     <div class="conversation-heading">
                         <h1>{model.active_work.title}<span class="live-status"><StatusDot />"Working"</span></h1>
                         <p><span>{model.active_work.project}</span><span class="path-separator">"/"</span><span>{model.active_work.branch}</span></p>

@@ -9,6 +9,7 @@ mod project_files;
 mod session_sync;
 mod state;
 mod supervisor;
+mod transcript_import;
 
 use std::env;
 use tauri::Manager;

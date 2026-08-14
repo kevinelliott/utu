@@ -267,7 +267,7 @@ pub const KNOWN_LOCAL_CLIS: [CliDefinition; 8] = [
         executable_aliases: &[],
         version_args: Some(&["--version"]),
         auth_probe: AuthProbe::Unsupported(
-            "No documented non-interactive Grok Build authentication-status command is available.",
+            "Login status cannot be verified from Utu without an interactive command.",
         ),
         transports: GROK_TRANSPORTS,
     },
@@ -1217,12 +1217,7 @@ fn probe_auth(
                     observed_at_unix_ms: None,
                     detail: Some(reason.into()),
                 },
-                Some(DiagnosticProblem {
-                    code: ProblemCode::AuthProbeUnsupported,
-                    severity: Severity::Unknown,
-                    summary: reason.into(),
-                    recovery: None,
-                }),
+                None,
             );
         }
     };

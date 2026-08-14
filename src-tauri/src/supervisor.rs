@@ -205,11 +205,9 @@ impl SessionSupervisor {
         let canonical_roots = self.canonical_project_roots();
         let mut paths = watched_claude_paths(&self.roots, &canonical_roots);
         paths.extend(watched_codex_paths(&self.roots));
-        paths.extend(watched_cursor_paths(&self.roots));
+        paths.extend(watched_cursor_paths(&self.roots, &canonical_roots));
         for path in paths {
-            let mode = if path == self.roots.codex_sessions
-                || path == self.roots.cursor_projects
-            {
+            let mode = if path == self.roots.codex_sessions {
                 RecursiveMode::Recursive
             } else {
                 RecursiveMode::NonRecursive
@@ -264,9 +262,7 @@ impl SessionSupervisor {
 }
 
 pub fn path_is_session_source(roots: &SessionRoots, path: &Path) -> bool {
-    path_is_under(&roots.claude_projects, path)
-        || path_is_under(&roots.codex_sessions, path)
-        || path_is_under(&roots.cursor_projects, path)
+    path_is_under(&roots.claude_projects, path) || path_is_under(&roots.codex_sessions, path)
 }
 
 fn path_is_under(root: &PathBuf, path: &Path) -> bool {
@@ -287,12 +283,6 @@ mod tests {
         assert!(path_is_session_source(
             &roots,
             &roots.codex_sessions.join("2026/rollout.jsonl")
-        ));
-        assert!(path_is_session_source(
-            &roots,
-            &roots
-                .cursor_projects
-                .join("Users-kevin-Projects-utu/agent-transcripts/abc/abc.jsonl")
         ));
         assert!(!path_is_session_source(
             &roots,

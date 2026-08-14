@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use leptos::prelude::*;
 
 use crate::{
     components::{
-        EvidenceTag, ICON_CHECK, ICON_CLOSE, ICON_CLOUD, ICON_COMMAND, ICON_LOCK, ICON_MORE,
-        ICON_PLUG, ICON_REFRESH, ICON_SHIELD, ICON_TERMINAL, Icon, StatusDot, WorkspaceNav,
+        AgentCliIcon, EvidenceTag, ICON_CHECK, ICON_CLOSE, ICON_CLOUD, ICON_COMMAND, ICON_LOCK,
+        ICON_MORE, ICON_PLUG, ICON_REFRESH, ICON_SHIELD, ICON_TERMINAL, Icon, StatusDot,
     },
     workspace_data::{
         ConnectorSummary, LiveStatus, WorkspaceAction, WorkspaceActionSink, WorkspaceModel,
@@ -19,6 +21,10 @@ pub fn IntegrationsView(
     let model = expect_context::<WorkspaceModel>();
     let actions = expect_context::<WorkspaceActionSink>();
     let live = expect_context::<LiveStatus>();
+    // enabled_map: connector_id → user has explicitly enabled (true) / disabled (false).
+    // Default: all enabled. Persisted only in UI state for now.
+    let enabled_map: RwSignal<HashMap<String, bool>> = RwSignal::new(HashMap::new());
+
     let refresh_all = move |_| {
         actions.dispatch(WorkspaceAction::RefreshConnector("all connectors".into()));
     };
@@ -27,7 +33,6 @@ pub fn IntegrationsView(
         <div class="workspace-layout integrations-layout">
             <header class="workspace-toolbar integrations-toolbar">
                 <div class="toolbar-leading">
-                    <WorkspaceNav />
                     <div><h1>"Integrations"</h1><p>"Readiness, authentication, and supported controls"</p></div>
                 </div>
                 <div class="toolbar-actions">
@@ -51,17 +56,86 @@ pub fn IntegrationsView(
 
                 <Show when=move || live.diagnostics.get().is_some() fallback=move || view! { <div class="integration-live-empty"><span class=if live.is_desktop() { "spinner" } else { "status-dot status-quiet" }></span><strong>{move || if live.is_desktop() { "Loading connector diagnostics" } else { "No live diagnostics on the web surface" }}</strong><small>{move || live.error.get().unwrap_or_else(|| "Waiting for the local connector service.".into())}</small></div> }>
                     <section class="connector-group live-connector-group">
-                        <header><span><h2>"Local agent CLIs"</h2><p>"Observed executable, version, authentication, and recovery evidence"</p></span><span class="connector-group-count">{move || live.diagnostics.get().map(|report| report.connectors.len()).unwrap_or_default()}</span></header>
+                        <header>
+                            <span><h2>"Local agent CLIs"</h2><p>"Observed executable, version, authentication, and recovery evidence"</p></span>
+                            <span class="connector-group-count">{move || live.diagnostics.get().map(|report| report.connectors.len()).unwrap_or_default()}</span>
+                        </header>
                         <div class="connector-rows">
-                            {move || live.diagnostics.get().map(|report| report.connectors.iter().enumerate().map(|(index, connector)| {
-                                let tone = diagnostic_tone(&connector.readiness);
-                                let detail = diagnostic_detail(connector);
-                                let version = connector.version.value.clone().unwrap_or_else(|| connector.version.status.clone());
-                                let name = connector.descriptor.display_name.clone();
-                                let connector_id = connector.descriptor.id.clone();
-                                let inspect_connector_id = connector_id.clone();
-                                view! { <article class=format!("connector-row connector-{tone}")><button class="connector-main" type="button" on:click=move |_| { inspector_open.set(true); actions.dispatch(WorkspaceAction::ConfigureConnector(inspect_connector_id.clone())); }><span class="connector-icon"><Icon path=ICON_TERMINAL /></span><span class="connector-identity"><strong>{name}<span class="live-label">"Live"</span></strong><small>{detail}</small></span><span class=format!("connector-status state-label {tone}")><StatusDot tone />{readiness_label(&connector.readiness)}</span><span class="connector-evidence">{connector.installation.kind.clone()}</span></button><div class="connector-capabilities"><span>{version}</span><span>{connector.auth.state.clone()}</span></div><button class="secondary-button connector-action" type="button" disabled=move || live.phase.get() == crate::workspace_data::LoadPhase::Error on:click=move |_| actions.dispatch(WorkspaceAction::RefreshConnector(connector_id.clone()))>{if index == 0 { "Run check" } else { "Recheck" }}</button></article> }
-                            }).collect_view())}
+                            {move || live.diagnostics.get().map(|report| {
+                                // Sort: available first, unavailable last
+                                let mut connectors: Vec<_> = report.connectors.iter().cloned().collect();
+                                connectors.sort_by_key(|c| connector_sort_key(&c.readiness));
+
+                                connectors.into_iter().enumerate().map(|(index, connector)| {
+                                    let tone = diagnostic_tone(&connector.readiness);
+                                    let detail = diagnostic_detail(&connector);
+                                    let version = connector.version.value.clone().unwrap_or_else(|| connector.version.status.clone());
+                                    let name = connector.descriptor.display_name.clone();
+                                    let connector_id = connector.descriptor.id.clone();
+                                    let inspect_id = connector_id.clone();
+                                    let toggle_id_sv = StoredValue::new(connector_id.clone());
+                                    let icon_id = connector_id.clone();
+                                    let is_unavailable = connector.readiness == "unavailable";
+
+                                    let is_enabled = Signal::derive(move || {
+                                        *enabled_map.get().get(toggle_id_sv.get_value().as_str()).unwrap_or(&true)
+                                    });
+
+                                    view! {
+                                        <article class=move || {
+                                            let base = format!("connector-row connector-{tone}");
+                                            if is_unavailable || !is_enabled.get() {
+                                                format!("{base} connector-muted")
+                                            } else {
+                                                base
+                                            }
+                                        }>
+                                            <button class="connector-main" type="button" on:click=move |_| {
+                                                inspector_open.set(true);
+                                                actions.dispatch(WorkspaceAction::ConfigureConnector(inspect_id.clone()));
+                                            }>
+                                                <span class="connector-icon">
+                                                    <AgentCliIcon connector_id=icon_id size="sm" />
+                                                </span>
+                                                <span class="connector-identity">
+                                                    <strong>{name}<span class="live-label">"Live"</span></strong>
+                                                    <small>{detail}</small>
+                                                </span>
+                                                <span class=format!("connector-status state-label {tone}")>
+                                                    <StatusDot tone />{readiness_label(&connector.readiness)}
+                                                </span>
+                                                <span class="connector-evidence">{connector.installation.kind.clone()}</span>
+                                            </button>
+                                            <div class="connector-capabilities">
+                                                <span>{version}</span>
+                                                <span>{connector.auth.state.clone()}</span>
+                                            </div>
+                                            <div class="connector-row-actions">
+                                                <button
+                                                    class="secondary-button connector-action"
+                                                    type="button"
+                                                    disabled=move || live.phase.get() == crate::workspace_data::LoadPhase::Error
+                                                    on:click=move |_| actions.dispatch(WorkspaceAction::RefreshConnector(connector_id.clone()))
+                                                >{if index == 0 { "Run check" } else { "Recheck" }}</button>
+                                                <label class="connector-toggle" title=move || if is_enabled.get() { "Disable this connector" } else { "Enable this connector" }>
+                                                    <input
+                                                        type="checkbox"
+                                                        prop:checked=move || is_enabled.get()
+                                                        on:change=move |_| {
+                                                            let id = toggle_id_sv.get_value();
+                                                            enabled_map.update(|map| {
+                                                                let current = *map.get(&id).unwrap_or(&true);
+                                                                map.insert(id, !current);
+                                                            });
+                                                        }
+                                                    />
+                                                    <span class="connector-toggle-track"></span>
+                                                </label>
+                                            </div>
+                                        </article>
+                                    }
+                                }).collect_view()
+                            })}
                         </div>
                     </section>
                 </Show>
@@ -86,6 +160,15 @@ fn diagnostic_tone(readiness: &str) -> &'static str {
         "ready" => "healthy",
         "installed_unverified" | "needs_attention" => "attention",
         _ => "problem",
+    }
+}
+
+fn connector_sort_key(readiness: &str) -> u8 {
+    match readiness {
+        "ready" => 0,
+        "installed_unverified" => 1,
+        "needs_attention" => 2,
+        _ => 3,
     }
 }
 
@@ -250,7 +333,7 @@ pub fn LiveIntegrationsInspector(inspector_open: RwSignal<bool>) -> impl IntoVie
                             <button class="primary-outline" type="button" disabled=move || live.phase.get() == crate::workspace_data::LoadPhase::Error on:click=move |_| actions.dispatch(WorkspaceAction::RefreshConnector(id.clone()))><Icon path=ICON_REFRESH />"Run checks again"</button>
                         </section>
                         <section class="inspector-section"><h3>"Evidence"</h3><dl class="detail-list"><div><dt>"Executable"</dt><dd><code>{executable}</code></dd></div><div><dt>"Version"</dt><dd>{version}</dd></div><div><dt>"Authentication"</dt><dd>{auth}</dd></div><div><dt>"Health"</dt><dd>{health}</dd></div></dl></section>
-                        <section class="inspector-section"><h3>"Problems and recovery"</h3><Show when=move || !problems.get_value().is_empty() fallback=move || view! { <p class="inspector-note">"No actionable problem was reported by this adapter."</p> }>{move || problems.get_value().into_iter().map(|(severity, summary, recovery)| view! { <div class="diagnostic-problem"><StatusDot tone=if severity == "error" { "problem" } else { "attention" } /><span><strong>{summary}</strong><small>{recovery.unwrap_or_else(|| "No automated recovery is available.".into())}</small></span></div> }).collect_view()}</Show></section>
+                        <section class="inspector-section"><h3>"Problems and recovery"</h3><Show when=move || !problems.get_value().is_empty() fallback=move || view! { <p class="inspector-note">"No actionable problem was reported by this adapter."</p> }>{move || problems.get_value().into_iter().map(|(severity, summary, recovery)| view! { <div class="diagnostic-problem"><StatusDot tone=if severity == "error" { "problem" } else { "attention" } /><span><strong>{summary}</strong>{recovery.map(|r| view! { <small>{r}</small> })}</span></div> }).collect_view()}</Show></section>
                     })
                 })}
             </Show>

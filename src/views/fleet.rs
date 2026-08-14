@@ -2,7 +2,7 @@ use leptos::prelude::*;
 
 use crate::components::{
     AgentAvatar, Composer, EmptyInspectorButton, EvidenceTag, ICON_CHECK, ICON_CLOSE, ICON_COMMAND,
-    ICON_FILE, ICON_MORE, ICON_PAUSE, ICON_SHIELD, ICON_STOP, Icon, StatusDot, WorkspaceNav,
+    ICON_FILE, ICON_MORE, ICON_PAUSE, ICON_SHIELD, ICON_STOP, Icon, StatusDot,
 };
 
 #[component]
@@ -17,7 +17,6 @@ pub fn FleetView(
         <div class="workspace-layout fleet-layout">
             <header class="workspace-toolbar fleet-toolbar">
                 <div class="toolbar-leading">
-                    <WorkspaceNav />
                     <AgentAvatar initials="CO" tone="teal" size="lg" />
                     <div class="fleet-heading">
                         <h1>"Codex"<span class="live-status"><StatusDot />"Running 18m"</span></h1>

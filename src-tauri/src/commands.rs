@@ -240,7 +240,9 @@ pub async fn session_stream(
     after_message_sequence: Option<u64>,
     after_event_sequence: Option<u64>,
 ) -> Result<SessionStream, String> {
-    run_blocking(&state, move |store| {
+    let store = Arc::clone(&state.store);
+    let roots = state.session_roots();
+    tauri::async_runtime::spawn_blocking(move || {
         let message_query = StreamQuery {
             after_sequence: after_message_sequence,
             limit: 500,
@@ -253,6 +255,25 @@ pub async fn session_stream(
             .read_session_projection(&session_id, message_query, event_query, 500)
             .map_err(store_error)?
             .ok_or_else(|| format!("session `{session_id}` was not found"))?;
+        // Lazy transcript hydration: if the store has no messages for this
+        // session yet and it has a provider session ID, try to import chat
+        // turns from the local agent transcript file on disk. Re-read the
+        // projection after import so the caller always sees the latest view.
+        let projection =
+            if projection.messages.is_empty() && projection.session.provider_session_id.is_some()
+            {
+                crate::transcript_import::import_transcript(
+                    &store,
+                    &projection.session,
+                    &roots,
+                );
+                store
+                    .read_session_projection(&session_id, message_query, event_query, 500)
+                    .map_err(store_error)?
+                    .ok_or_else(|| format!("session `{session_id}` was not found"))?
+            } else {
+                projection
+            };
         Ok(SessionStream {
             session: projection.session,
             messages: projection.messages,
@@ -264,6 +285,7 @@ pub async fn session_stream(
         })
     })
     .await
+    .map_err(|error| format!("native worker failed: {error}"))?
 }
 
 #[tauri::command]

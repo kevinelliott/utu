@@ -276,7 +276,9 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ),
     (
         "session_title_hint",
-        "ALTER TABLE sessions ADD COLUMN title_hint TEXT;",
+        r#"
+        ALTER TABLE sessions ADD COLUMN title_hint TEXT;
+        "#,
     ),
 ];
 
