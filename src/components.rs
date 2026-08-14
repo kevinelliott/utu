@@ -125,21 +125,20 @@ pub fn EvidenceTag(kind: &'static str) -> impl IntoView {
     view! { <span class=format!("evidence-tag evidence-{tone}")>{kind}</span> }
 }
 
-/// Maps an `agent_id` string to an SVG logo element (16–20 px inline).
-/// The agent name is exposed via the `title` attribute for hover tooltips.
-/// No external URLs are used; all paths are inlined.
+/// Branded icon for a known agent CLI. Hover shows the official name.
+/// Paths are inlined; no remote fetches.
 #[component]
 pub fn AgentCliIcon(
-    #[prop(into)] agent_id: String,
-    #[prop(into)] display_name: String,
+    #[prop(into)] connector_id: String,
+    #[prop(default = "sm")] size: &'static str,
 ) -> impl IntoView {
-    // Returns (svg_inner_content, viewBox, fill_class)
-    let (inner, viewbox, extra_class) = agent_svg(&agent_id);
+    let name = connector_display_name(&connector_id);
+    let (inner, viewbox, extra_class) = agent_svg(&connector_id);
     view! {
         <span
-            class=format!("agent-cli-icon agent-icon-{}", agent_id_slug(&agent_id))
-            title=display_name
-            aria-hidden="true"
+            class=format!("agent-cli-icon agent-cli-icon-{size} agent-icon-{}", agent_id_slug(&connector_id))
+            title=name
+            aria-label=name
         >
             <svg
                 viewBox=viewbox
@@ -318,97 +317,5 @@ where
                 }.into_any()
             }}
         </div>
-    }
-}
-
-/// Branded icon for a known agent CLI connector.
-///
-/// Renders an official or official-like inline SVG logo for each known
-/// connector.  All paths are bundled — no remote fetches.  Falls back to a
-/// muted initials badge for unknown connectors so unknown agents never
-/// silently render blank.
-#[component]
-pub fn AgentCliIcon(
-    #[prop(into)] connector_id: String,
-    #[prop(default = "sm")] size: &'static str,
-) -> impl IntoView {
-    let name = connector_display_name(&connector_id);
-    let logo = connector_logo_svg(&connector_id);
-    if let Some(svg) = logo {
-        view! {
-            <span
-                class=format!("agent-cli-icon agent-cli-icon-logo agent-cli-icon-{size}")
-                title=name
-                aria-label=name
-                aria-hidden="true"
-                inner_html=svg
-            />
-        }
-        .into_any()
-    } else {
-        let bg = connector_bg_color(&connector_id);
-        let initials = connector_initials(&connector_id);
-        view! {
-            <span
-                class=format!("agent-cli-icon agent-cli-icon-{size}")
-                style=format!("background:{bg}")
-                title=name
-                aria-label=name
-                aria-hidden="true"
-            >
-                {initials}
-            </span>
-        }
-        .into_any()
-    }
-}
-
-/// Returns an inline SVG string for known connectors, `None` for unknowns.
-///
-/// All SVGs are 16×16 and designed to be legible at 16–20 px.  Paths are
-/// derived from publicly documented official brand assets; no hotlinks or
-/// external assets are needed at runtime.
-pub fn connector_logo_svg(connector_id: &str) -> Option<&'static str> {
-    match connector_id {
-        // Cursor — stylised "C" cursor-arrow composite mark
-        "cursor" | "cursor-agent" | "cursor-sessions" => Some(
-            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect width="16" height="16" rx="3.5" fill="#1a1a1a"/>
-              <path d="M4 3h8v1.5H4V3zm0 4h5.5V8.5H4V7zm0 4h8v1.5H4V11z" fill="#ffffff"/>
-              <path d="M10 7l4 4-1.5 0.5-1-2.5L10 11V7z" fill="#c792ea"/>
-            </svg>"#,
-        ),
-        // Claude / Anthropic — asterisk / star mark
-        "claude" | "claude-code" | "claude-sessions" | "claude-agent" => Some(
-            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect width="16" height="16" rx="3.5" fill="#d4774a"/>
-              <path d="M8 3v10M3 8h10M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>"#,
-        ),
-        // Codex / OpenAI — simplified blossom / swirl
-        "codex" | "codex-cli" => Some(
-            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect width="16" height="16" rx="3.5" fill="#4a6fa5"/>
-              <path d="M8 2.5A5.5 5.5 0 1 1 8 13.5A5.5 5.5 0 0 1 8 2.5z" stroke="#fff" stroke-width="1.4" fill="none"/>
-              <path d="M8 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z" fill="#fff" opacity="0.6"/>
-              <circle cx="8" cy="8" r="1.2" fill="#fff"/>
-            </svg>"#,
-        ),
-        // Gemini — Google-style diamond mark
-        "gemini" => Some(
-            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect width="16" height="16" rx="3.5" fill="#3367d6"/>
-              <path d="M8 2.5C8 2.5 5 6 5 8s3 5.5 3 5.5 3-3.5 3-5.5-3-5.5-3-5.5z" fill="#fff"/>
-              <path d="M2.5 8c0 0 3.5-3 5.5-3s5.5 3 5.5 3-3.5 3-5.5 3-5.5-3-5.5-3z" fill="#fff" opacity="0.55"/>
-            </svg>"#,
-        ),
-        // Grok / xAI — stylised X
-        "grok" => Some(
-            r#"<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect width="16" height="16" rx="3.5" fill="#2d2d2d"/>
-              <path d="M4 4l8 8M12 4l-8 8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-            </svg>"#,
-        ),
-        _ => None,
     }
 }
