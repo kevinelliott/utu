@@ -246,7 +246,8 @@ pub fn App() -> impl IntoView {
             notice.set(Some(message));
         }
     });
-
+    let has_context_rail =
+        Signal::derive(move || !matches!(active_view.get(), AppView::Integrations | AppView::Settings));
     view! {
         <div class="app-frame">
             <header class="native-titlebar" data-tauri-drag-region="">
@@ -268,11 +269,15 @@ pub fn App() -> impl IntoView {
             </header>
 
             <div
-                class=move || if inspector_open.get() { "app-shell inspector-is-open" } else { "app-shell" }
+                class="app-shell"
+                class:inspector-is-open=move || inspector_open.get()
                 class:context-is-open=move || context_open.get()
+                class:has-context=move || has_context_rail.get()
             >
                 <UtilityRail active_view context_open />
-                <ContextRail active_view read_only />
+                <Show when=move || has_context_rail.get()>
+                    <ContextRail active_view read_only />
+                </Show>
 
                 <section class="work-surface" aria-label="Utu workspace">
                     <div class="mobile-workspace-switch">

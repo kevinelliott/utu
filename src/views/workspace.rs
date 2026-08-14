@@ -2,9 +2,9 @@ use leptos::prelude::*;
 
 use crate::{
     components::{
-        AgentAvatar, EvidenceTag, ICON_BRANCH, ICON_CHECK, ICON_CHEVRON_RIGHT, ICON_CLOSE,
-        ICON_FILE, ICON_FOLDER, ICON_LOCK, ICON_MORE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP,
-        ICON_TERMINAL, Icon, StatusDot, VirtualList,
+        AgentCliIcon, EvidenceTag, ICON_BRANCH, ICON_CHECK, ICON_CHEVRON_RIGHT,
+        ICON_CLOSE, ICON_FILE, ICON_FOLDER, ICON_LOCK, ICON_MORE, ICON_PLUS, ICON_SEND,
+        ICON_SHIELD, ICON_STOP, ICON_TERMINAL, Icon, StatusDot, VirtualList,
     },
     markdown::render_markdown,
     workspace_data::{
@@ -64,6 +64,10 @@ pub fn LiveWorkspaceView(
                             .find(|a| a.id == session.agent_id)
                             .map(|a| a.display_name.clone())
                             .unwrap_or_else(|| session.agent_id.clone());
+                        let connector_id = snapshot.agents.iter()
+                            .find(|a| a.id == session.agent_id)
+                            .map(|a| a.connector_id.clone())
+                            .unwrap_or_else(|| session.agent_id.clone());
                         let project_name = snapshot.projects.iter()
                             .find(|p| p.id == session.project_id)
                             .map(|p| p.name.clone())
@@ -80,7 +84,7 @@ pub fn LiveWorkspaceView(
                         Some(view! {
                             <div class="live-session-metadata-card">
                                 <div class="live-session-metadata-header">
-                                    <StatusDot tone />
+                                    <AgentCliIcon connector_id size="sm" />
                                     <strong>{title}</strong>
                                     <span class=format!("state-label {tone}")>{state}</span>
                                 </div>
@@ -182,11 +186,12 @@ fn WorkspaceSessionsPane() -> impl IntoView {
 
     // Pre-sort and pre-compute titles once per snapshot/project change (not on every scroll).
     #[derive(Clone)]
-    struct Row {        id: String,
+    struct Row {
+        id: String,
         title: String,
         detail: String,
         state: String,
-        tone: &'static str,
+        connector_id: String,
     }
 
     let sorted_sessions = Signal::derive(move || {
@@ -201,7 +206,12 @@ fn WorkspaceSessionsPane() -> impl IntoView {
                 title: session_title(&snapshot, session),
                 detail: session_detail(&snapshot, session, false),
                 state: session.state.clone(),
-                tone: session_state_tone(&session.state),
+                connector_id: snapshot
+                    .agents
+                    .iter()
+                    .find(|a| a.id == session.agent_id)
+                    .map(|a| a.connector_id.clone())
+                    .unwrap_or_else(|| session.agent_id.clone()),
             })
             .collect();
         rows.sort_by(|a, b| {
@@ -277,7 +287,7 @@ fn WorkspaceSessionsPane() -> impl IntoView {
                                         type="button"
                                         on:click=move |_| actions.dispatch(WorkspaceAction::SelectSession(session_id.clone()))
                                     >
-                                        <span class="session-state"><StatusDot tone=row.tone /></span>
+                                        <AgentCliIcon connector_id=row.connector_id size="sm" />
                                         <span>
                                             <strong>{row.title}</strong>
                                             <small>{row.detail}" · "{row.state}</small>
@@ -316,19 +326,33 @@ fn LiveConversationStream() -> impl IntoView {
                         .find(|agent| agent.id == stream.session.agent_id)
                         .map(|agent| agent.display_name.clone())
                 }).unwrap_or_else(|| "Agent".into());
+                let connector_id = live.snapshot.get().and_then(|snapshot| {
+                    snapshot
+                        .agents
+                        .iter()
+                        .find(|agent| agent.id == stream.session.agent_id)
+                        .map(|agent| agent.connector_id.clone())
+                }).unwrap_or_else(|| stream.session.agent_id.clone());
                 stream.messages.iter().cloned().map(|message| {
                     let role = message.role.clone();
-                    let (turn_class, avatar_class, avatar, author) = match role.as_str() {
-                        "owner" => ("conversation-turn owner-turn live-stored-turn", "turn-avatar owner-avatar-small", "K", "You".to_owned()),
-                        "agent" => ("conversation-turn agent-turn live-stored-turn", "turn-avatar agent-avatar-small", "AI", agent_name.clone()),
-                        _ => ("conversation-turn system-turn live-stored-turn", "turn-avatar system-avatar-small", "·", "Utu".to_owned()),
+                    let (turn_class, author) = match role.as_str() {
+                        "owner" => ("conversation-turn owner-turn live-stored-turn", "You".to_owned()),
+                        "agent" => ("conversation-turn agent-turn live-stored-turn", agent_name.clone()),
+                        _ => ("conversation-turn system-turn live-stored-turn", "Utu".to_owned()),
                     };
+                    let connector_id_clone = connector_id.clone();
                     let evidence = message.evidence.clone();
                     let source = message.source.clone();
                     let body_html = render_markdown(&message.body);
                     view! {
                         <article class=turn_class data-message-id=message.id>
-                            <div class=avatar_class aria-hidden="true">{avatar}</div>
+                            {if role == "agent" {
+                                view! { <AgentCliIcon connector_id=connector_id_clone size="md" /> }.into_any()
+                            } else if role == "owner" {
+                                view! { <div class="turn-avatar owner-avatar-small" aria-hidden="true">"K"</div> }.into_any()
+                            } else {
+                                view! { <div class="turn-avatar system-avatar-small" aria-hidden="true">"·"</div> }.into_any()
+                            }}
                             <div class="turn-content">
                                 <div class="turn-meta"><strong>{author}</strong><span>{format!("Message {}", message.sequence)}</span><span class="live-evidence-chip">{evidence}</span></div>
                                 <div class="turn-body markdown-body" inner_html=body_html></div>
@@ -515,8 +539,8 @@ pub fn WorkspaceView(
                 </div>
                 <div class="toolbar-actions conversation-actions">
                     <div class="avatar-stack" aria-label="Assigned agents: Codex and Claude">
-                        <AgentAvatar initials=model.agents[0].initials tone=model.agents[0].tone size="sm" />
-                        <AgentAvatar initials=model.agents[1].initials tone=model.agents[1].tone size="sm" />
+                        <AgentCliIcon connector_id=model.agents[0].id size="sm" />
+                        <AgentCliIcon connector_id=model.agents[1].id size="sm" />
                     </div>
                     <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)><Icon path=ICON_FOLDER />"Files"<span class="change-count">"5"</span></button>
                     <button class="icon-button" type="button" aria-label="Session actions" title="Session actions"><Icon path=ICON_MORE /></button>
@@ -538,7 +562,7 @@ pub fn WorkspaceView(
                 </article>
 
                 <article class="conversation-turn agent-turn">
-                    <AgentAvatar initials=model.agents[0].initials tone=model.agents[0].tone size="md" />
+                    <AgentCliIcon connector_id=model.agents[0].id size="md" />
                     <div class="turn-content">
                         <div class="turn-meta"><strong>{model.agents[0].name}</strong><span>{model.agents[0].provider}" · "{model.agents[0].model}</span><EvidenceTag kind="Inferred" /></div>
                         <p>{model.active_work.agent_response}</p>
@@ -603,7 +627,7 @@ pub fn WorkspaceView(
                 </article>
 
                 <article class="conversation-turn handoff-turn">
-                    <AgentAvatar initials=model.agents[1].initials tone=model.agents[1].tone size="md" />
+                    <AgentCliIcon connector_id=model.agents[1].id size="md" />
                     <div class="turn-content">
                         <div class="turn-meta"><strong>{model.agents[1].name}</strong><span>"Queued reviewer"</span><EvidenceTag kind="Stale" /></div>
                         <p>"I’ll review the permission scope, auth recovery, and every claim derived from connector evidence after Codex completes verification."</p>
@@ -611,7 +635,7 @@ pub fn WorkspaceView(
                 </article>
 
                 <div class="streaming-row" role="status">
-                    <AgentAvatar initials=model.agents[0].initials tone=model.agents[0].tone size="sm" />
+                    <AgentCliIcon connector_id=model.agents[0].id size="sm" />
                     <span>{model.active_work.streaming_activity}</span>
                     <span class="streaming-dots" aria-hidden="true"><i></i><i></i><i></i></span>
                     <button type="button" class="text-button" disabled=read_only on:click=move |_| notice.set(Some("Stop requires confirmation when a live connector owns the session.".into()))><Icon path=ICON_STOP />"Stop"</button>
@@ -659,8 +683,8 @@ fn WorkspaceComposer(read_only: bool) -> impl IntoView {
             ></textarea>
             <div class="composer-assignment-row">
                 <span class="composer-field-label">"Assign"</span>
-                <button type="button" class=move || assignment_class(codex.get()) aria-pressed=move || codex.get().to_string() disabled=read_only on:click=move |_| { codex.update(|value| *value = !*value); dispatch_selected_agents(&codex_actions, codex.get(), claude.get(), local.get()); }><AgentAvatar initials=model.agents[0].initials tone=model.agents[0].tone size="xs" />"Codex"</button>
-                <button type="button" class=move || assignment_class(claude.get()) aria-pressed=move || claude.get().to_string() disabled=read_only on:click=move |_| { claude.update(|value| *value = !*value); dispatch_selected_agents(&claude_actions, codex.get(), claude.get(), local.get()); }><AgentAvatar initials=model.agents[1].initials tone=model.agents[1].tone size="xs" />"Claude"</button>
+                <button type="button" class=move || assignment_class(codex.get()) aria-pressed=move || codex.get().to_string() disabled=read_only on:click=move |_| { codex.update(|value| *value = !*value); dispatch_selected_agents(&codex_actions, codex.get(), claude.get(), local.get()); }><AgentCliIcon connector_id=model.agents[0].id size="xs" />"Codex"</button>
+                <button type="button" class=move || assignment_class(claude.get()) aria-pressed=move || claude.get().to_string() disabled=read_only on:click=move |_| { claude.update(|value| *value = !*value); dispatch_selected_agents(&claude_actions, codex.get(), claude.get(), local.get()); }><AgentCliIcon connector_id=model.agents[1].id size="xs" />"Claude"</button>
                 <button type="button" class=move || assignment_class(local.get()) aria-pressed=move || local.get().to_string() disabled=read_only on:click=move |_| { local.update(|value| *value = !*value); dispatch_selected_agents(&local_actions, codex.get(), claude.get(), local.get()); }><Icon path=ICON_PLUS />"Agent"</button>
             </div>
             <div class="workspace-composer-toolbar">

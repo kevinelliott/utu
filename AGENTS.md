@@ -6,6 +6,7 @@
 - Sessions running outside Utu are observe-only: see and process them, but do not write to, interrupt, or send directions into those sessions. Format transcript contents as markdown.
 - Title bar should align with the window controls. Omit "Local owner" and "Live local" chrome text; the status icon should reflect whether agents are active, idle, or awaiting interaction.
 - Keep the Files pane closed by default.
+- On Integrations and Settings, show the main icon nav and the main panel; hide the second-tier ContextRail. Show the details/inspector only if it was already supposed to show — do not force-open or force-close it.
 
 ## Learned Workspace Facts
 
@@ -13,4 +14,7 @@
 - Workspace is a left-to-right master-detail layout: projects, then that project's sessions, then session details — do not stack sessions under the project list.
 - Monitor all agent types (Codex, Claude Code, Cursor, and others) in realtime; Fleet should list every running session. Use Sync only for initial setup, adding a project, or a manual request on Integrations/Project.
 - Sync stays metadata-only; hydrate a session's transcript lazily when that session is opened.
-- Cursor live sessions are discovered from `~/.cursor/projects/*/agent-transcripts/`. Local `cargo tauri dev` / `trunk serve` binds TCP 1421.
+- Cursor live sessions are discovered from `~/.cursor/projects/*/agent-transcripts/`. Cursor on-disk project dirs are `Users-...` (no leading dash), unlike Claude’s `-Users-...`. Local `cargo tauri dev` / `trunk serve` binds TCP 1421.
+- Do not mix Leptos `class=move ||` (replaces the entire class) with `class:` toggles on the same element.
+- Inject SVG markup via `inner_html` on an HTML element, not on an `<svg>` created by `view!`.
+- Raw strings containing `fill="#..."` must use `r##"..."##`.

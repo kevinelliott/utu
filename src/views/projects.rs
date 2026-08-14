@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 
 use crate::components::{
-    AgentAvatar, Composer, EmptyInspectorButton, ICON_CHECK, ICON_CLOSE, ICON_FILE, ICON_MORE,
-    ICON_PAUSE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP, Icon, StatusDot,
+    AgentAvatar, AgentCliIcon, Composer, EmptyInspectorButton, ICON_CHECK, ICON_CLOSE, ICON_FILE,
+    ICON_MORE, ICON_PAUSE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP, Icon, StatusDot,
 };
 
 #[component]
@@ -22,9 +22,9 @@ pub fn ProjectsView(
                 </div>
                 <div class="toolbar-actions project-toolbar-actions">
                     <div class="avatar-stack" aria-label="5 active agents">
-                        <AgentAvatar initials="CO" tone="teal" size="sm" />
-                        <AgentAvatar initials="CL" tone="amber" size="sm" />
-                        <AgentAvatar initials="EM" tone="blue" size="sm" />
+                        <AgentCliIcon connector_id="codex" size="sm" />
+                        <AgentCliIcon connector_id="claude" size="sm" />
+                        <AgentCliIcon connector_id="aider" size="sm" />
                         <span class="stack-more">"+2"</span>
                     </div>
                     <button class="icon-button" type="button" aria-label="Project actions"><Icon path=ICON_MORE /></button>
@@ -64,7 +64,7 @@ pub fn ProjectsView(
                     <article class="task-band expanded-task" on:click=move |_| inspector_open.set(true)>
                         <div class="task-band-summary">
                             <span class="task-kind"><Icon path=ICON_FILE /></span>
-                            <div class="task-copy"><strong>"Review exact candidate"</strong><small><AgentAvatar initials="CO" tone="teal" size="xs" />"Codex"<span>"→"</span><AgentAvatar initials="CL" tone="amber" size="xs" />"Claude"</small></div>
+                            <div class="task-copy"><strong>"Review exact candidate"</strong><small><AgentCliIcon connector_id="codex" size="xs" />"Codex"<span>"→"</span><AgentCliIcon connector_id="claude" size="xs" />"Claude"</small></div>
                             <span class="task-freshness">"Observed 3m ago"</span>
                             <span class="state-label healthy"><StatusDot />"Working"</span>
                         </div>
@@ -76,7 +76,7 @@ pub fn ProjectsView(
                             <div class="handoff-grid">
                                 <div>
                                     <h3>"Handoff"</h3>
-                                    <p class="handoff-line"><AgentAvatar initials="CO" tone="teal" size="sm" /><strong>"Codex"</strong><span>"→"</span><AgentAvatar initials="CL" tone="amber" size="sm" /><strong>"Claude"</strong></p>
+                                    <p class="handoff-line"><AgentCliIcon connector_id="codex" size="sm" /><strong>"Codex"</strong><span>"→"</span><AgentCliIcon connector_id="claude" size="sm" /><strong>"Claude"</strong></p>
                                     <small>"Will hand off when analysis is complete."</small>
                                 </div>
                                 <div>
@@ -140,9 +140,9 @@ pub fn ProjectInspector(
             <section class="inspector-section">
                 <h3>"Assignees"</h3>
                 <div class="assignee-handoff">
-                    <div><AgentAvatar initials="CO" tone="teal" size="md" /><span><strong>"Codex"</strong><small>"Analyzer"</small></span></div>
+                    <div><AgentCliIcon connector_id="codex" size="md" /><span><strong>"Codex"</strong><small>"Analyzer"</small></span></div>
                     <span>"→"</span>
-                    <div><AgentAvatar initials="CL" tone="amber" size="md" /><span><strong>"Claude"</strong><small>"Reviewer"</small></span></div>
+                    <div><AgentCliIcon connector_id="claude" size="md" /><span><strong>"Claude"</strong><small>"Reviewer"</small></span></div>
                 </div>
             </section>
 

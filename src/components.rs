@@ -133,22 +133,23 @@ pub fn AgentCliIcon(
     #[prop(default = "sm")] size: &'static str,
 ) -> impl IntoView {
     let name = connector_display_name(&connector_id);
-    let (inner, viewbox, extra_class) = agent_svg(&connector_id);
+    let (path_html, viewbox, extra_class) = agent_svg(&connector_id);
+    let slug = agent_id_slug(&connector_id);
+    // Inject the full SVG as innerHTML of the span. Using inner_html on the
+    // outer span (an HTML element) is reliable in Leptos 0.8 WASM — the same
+    // technique used for markdown bodies. Attempting inner_html on an
+    // SVG-namespace element created by the view! macro does not reliably call
+    // set_inner_html in the current runtime.
+    let svg_markup = format!(
+        r#"<svg viewBox="{viewbox}" xmlns="http://www.w3.org/2000/svg" class="agent-logo {extra_class}" focusable="false" aria-hidden="true">{path_html}</svg>"#
+    );
     view! {
         <span
-            class=format!("agent-cli-icon agent-cli-icon-{size} agent-icon-{}", agent_id_slug(&connector_id))
+            class=format!("agent-cli-icon agent-cli-icon-{size} agent-icon-{slug}")
             title=name
             aria-label=name
-        >
-            <svg
-                viewBox=viewbox
-                xmlns="http://www.w3.org/2000/svg"
-                class=format!("agent-logo {extra_class}")
-                focusable="false"
-                aria-hidden="true"
-                inner_html=inner
-            ></svg>
-        </span>
+            inner_html=svg_markup
+        ></span>
     }
 }
 

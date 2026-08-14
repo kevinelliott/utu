@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 use crate::components::{
-    AgentAvatar, Composer, EmptyInspectorButton, EvidenceTag, ICON_CHECK, ICON_CLOSE, ICON_FILE,
+    AgentCliIcon, Composer, EmptyInspectorButton, EvidenceTag, ICON_CHECK, ICON_CLOSE, ICON_FILE,
     ICON_FILTER, ICON_MORE, ICON_PAUSE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP, Icon,
     StatusDot,
 };
@@ -37,7 +37,7 @@ pub fn AttentionView(
 
             <div class="work-stream attention-stream">
                 <article class="attention-event is-selected" on:click=move |_| inspector_open.set(true)>
-                    <div class="event-avatar"><AgentAvatar initials="CL" tone="coral" size="lg" /><StatusDot tone="attention" /></div>
+                    <div class="event-avatar"><AgentCliIcon connector_id="claude" size="lg" /><StatusDot tone="attention" /></div>
                     <div class="event-body">
                         <div class="event-meta">
                             <div><strong>"Claude"</strong><span>"Anthropic"</span><span class="meta-divider">"HomeTender / release-1.2"</span></div>
@@ -61,7 +61,7 @@ pub fn AttentionView(
                 </article>
 
                 <article class="attention-event" on:click=move |_| inspector_open.set(true)>
-                    <div class="event-avatar"><AgentAvatar initials="CO" tone="blue" size="lg" /><StatusDot tone="problem" /></div>
+                    <div class="event-avatar"><AgentCliIcon connector_id="codex" size="lg" /><StatusDot tone="problem" /></div>
                     <div class="event-body">
                         <div class="event-meta">
                             <div><strong>"Codex"</strong><span>"OpenAI"</span><span class="meta-divider">"NOCTIVOX / ingest-pipeline"</span></div>
@@ -85,7 +85,7 @@ pub fn AttentionView(
                 </article>
 
                 <article class="attention-event" on:click=move |_| inspector_open.set(true)>
-                    <div class="event-avatar"><AgentAvatar initials="GE" tone="lime" size="lg" /><StatusDot tone="attention" /></div>
+                    <div class="event-avatar"><AgentCliIcon connector_id="gemini" size="lg" /><StatusDot tone="attention" /></div>
                     <div class="event-body">
                         <div class="event-meta">
                             <div><strong>"Gemma"</strong><span>"Local"</span><span class="meta-divider">"MediaServer / subtitle-sync"</span></div>
@@ -122,7 +122,7 @@ pub fn AttentionInspector(
         <div class="inspector-content">
             <header class="inspector-header">
                 <div class="inspector-identity">
-                    <AgentAvatar initials="CL" tone="coral" size="lg" />
+                    <AgentCliIcon connector_id="claude" size="lg" />
                     <div><h2>"Claude"</h2><p>"HomeTender / release-1.2"</p></div>
                 </div>
                 <button class="icon-button" type="button" aria-label="Close details" on:click=move |_| inspector_open.set(false)><Icon path=ICON_CLOSE /></button>

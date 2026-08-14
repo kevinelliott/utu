@@ -213,13 +213,25 @@ h3 {
   height: 100dvh;
   min-height: 520px;
   display: grid;
-  grid-template-columns: 56px 252px minmax(0, 1fr) 0;
+  /* 2-rail default: main nav + main panel (Integrations, Settings) */
+  grid-template-columns: 56px minmax(0, 1fr);
   overflow: hidden;
   background: var(--chrome-bottom);
   transition: grid-template-columns 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* 3-rail: main nav + context rail + main panel */
+.app-shell.has-context {
+  grid-template-columns: 56px 252px minmax(0, 1fr);
+}
+
+/* 3-rail: main nav + main panel + inspector (no context, e.g. Integrations with selection) */
 .app-shell.inspector-is-open {
+  grid-template-columns: 56px minmax(0, 1fr) 326px;
+}
+
+/* 4-rail: main nav + context rail + main panel + inspector */
+.app-shell.has-context.inspector-is-open {
   grid-template-columns: 56px 252px minmax(480px, 1fr) 326px;
 }
 
@@ -1269,6 +1281,7 @@ h3 {
 }
 
 .avatar-stack .agent-avatar,
+.avatar-stack .agent-cli-icon,
 .avatar-stack .stack-more {
   margin-left: -7px;
   box-shadow: 0 0 0 2px var(--surface);
@@ -3089,8 +3102,6 @@ button.task-band:hover {
 }
 
 .connector-group {
-  max-width: 960px;
-  margin: 0 auto;
 }
 
 .connector-group + .connector-group {
@@ -3238,14 +3249,13 @@ button.task-band:hover {
 }
 
 .integration-empty {
-  max-width: 960px;
   min-height: 62px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 10px 4px;
-  margin: 18px auto 0;
+  margin-top: 18px;
   border-top: 1px solid var(--line-strong);
 }
 
@@ -3293,8 +3303,13 @@ button.task-band:hover {
 }
 
 @media (max-width: 1180px) {
-  .app-shell,
-  .app-shell.inspector-is-open {
+  /* Inspector collapses to overlay — grid is always 2 or 3 rail at this width */
+  .app-shell {
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+
+  .app-shell.has-context,
+  .app-shell.has-context.inspector-is-open {
     grid-template-columns: 54px 230px minmax(0, 1fr);
   }
 
@@ -3349,7 +3364,9 @@ button.task-band:hover {
   }
 
   .app-shell,
-  .app-shell.inspector-is-open {
+  .app-shell.has-context,
+  .app-shell.inspector-is-open,
+  .app-shell.has-context.inspector-is-open {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) 54px;
     border-radius: 0;
@@ -5161,7 +5178,7 @@ body:has(.about-shell) {
 }
 
 /* ─────────────────────────────────────────────
-   Agent CLI icon (branded initials avatar)
+   Agent CLI icon (SVG brand mark wrapper)
    ───────────────────────────────────────────── */
 
 .agent-cli-icon {
@@ -5172,7 +5189,6 @@ body:has(.about-shell) {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0;
-  color: rgba(255, 255, 255, 0.9);
   flex-shrink: 0;
   user-select: none;
 }
@@ -5189,6 +5205,28 @@ body:has(.about-shell) {
   height: 28px;
   font-size: 10px;
 }
+
+.agent-cli-icon-lg {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.agent-cli-icon-xs {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 7px;
+}
+
+/* Brand tints — must follow the .agent-cli-icon block so these win the cascade. */
+.agent-icon-claude  { color: #c47b50; }
+.agent-icon-openai  { color: #19191c; }
+.agent-icon-cursor  { color: #1872f2; }
+.agent-icon-gemini  { color: #4285f4; }
+.agent-icon-grok    { color: #111; }
+.agent-icon-agent   { color: var(--fg-subtle, #6b7280); }
 
 /* ─────────────────────────────────────────────
    Overview / orbital visualization
@@ -5368,14 +5406,11 @@ body:has(.about-shell) {
    ───────────────────────────────────────────── */
 
 .settings-layout {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  /* Uses workspace-layout grid; toolbar is enforced 56px, content fills 1fr */
 }
 
 .settings-content {
-  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px 24px;
   display: flex;

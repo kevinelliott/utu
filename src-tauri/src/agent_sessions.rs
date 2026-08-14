@@ -80,6 +80,25 @@ pub fn claude_project_dir(roots: &SessionRoots, canonical_root: &str) -> PathBuf
         .join(claude_project_dirname(canonical_root))
 }
 
+/// Encodes a canonical project root into the directory name used by Cursor.
+///
+/// Cursor's encoding is the same as Claude Code's except it omits the leading
+/// `-` that Claude adds for the initial `/` in an absolute path.  On disk the
+/// directory is therefore `Users-kevin-Projects-foo` rather than
+/// `-Users-kevin-Projects-foo`.
+pub fn cursor_project_dirname(canonical_root: &str) -> String {
+    let full = claude_project_dirname(canonical_root);
+    full.strip_prefix('-')
+        .map(str::to_owned)
+        .unwrap_or(full)
+}
+
+pub fn cursor_project_dir(roots: &SessionRoots, canonical_root: &str) -> PathBuf {
+    roots
+        .cursor_projects
+        .join(cursor_project_dirname(canonical_root))
+}
+
 pub fn list_claude_sessions(
     roots: &SessionRoots,
     canonical_root: &str,
@@ -245,10 +264,7 @@ pub fn watched_cursor_paths(roots: &SessionRoots, canonical_roots: &[String]) ->
     ];
     for root in canonical_roots {
         // Watch the agent-transcripts directory so new UUID session dirs are detected.
-        let transcripts = roots
-            .cursor_projects
-            .join(claude_project_dirname(root))
-            .join("agent-transcripts");
+        let transcripts = cursor_project_dir(roots, root).join("agent-transcripts");
         paths.push(transcripts);
     }
     paths
@@ -298,7 +314,7 @@ pub fn list_all_cursor_sessions(
         if !transcripts_dir.is_dir() {
             continue;
         }
-        let Some(cwd) = resolve_claude_encoded_dirname(encoded) else {
+        let Some(cwd) = resolve_cursor_encoded_dirname(encoded) else {
             continue;
         };
         // Each session is a UUID-named subdirectory containing <uuid>.jsonl.
@@ -351,9 +367,12 @@ fn extract_cursor_title_hint(transcript: &Path) -> Option<String> {
     if let Some(start) = line.find("<user_query>") {
         let after = &line[start + "<user_query>".len()..];
         let end = after.find("</user_query>").unwrap_or(after.len());
-        let query = after[..end].trim();
+        // The line is raw JSON; `\n` is the two-char escape sequence, not a
+        // real newline, so we normalise it before trimming.
+        let query = after[..end].replace("\\n", " ").replace("\\r", "");
+        let query = query.trim().to_owned();
         if !query.is_empty() {
-            return Some(truncate_title(query, 80));
+            return Some(truncate_title(&query, 80));
         }
     }
     // Fallback: extract the first "text" value from the JSON.
@@ -661,6 +680,16 @@ fn read_dir_dirs(dir: &Path) -> Result<Vec<PathBuf>, String> {
         }
     }
     Ok(dirs)
+}
+
+/// Resolves a Cursor-encoded project directory name back to a canonical path.
+///
+/// Cursor omits the leading `-` that Claude Code adds for the initial `/`, so
+/// the on-disk name is `Users-kevin-Projects-foo` rather than
+/// `-Users-kevin-Projects-foo`.  This function prepends the missing `-` and
+/// delegates to `resolve_claude_encoded_dirname`.
+fn resolve_cursor_encoded_dirname(encoded: &str) -> Option<String> {
+    resolve_claude_encoded_dirname(&format!("-{encoded}"))
 }
 
 fn resolve_claude_encoded_dirname(encoded: &str) -> Option<String> {
@@ -1020,6 +1049,18 @@ mod tests {
     }
 
     #[test]
+    fn cursor_dirname_omits_leading_dash() {
+        assert_eq!(
+            cursor_project_dirname("/Users/kevin/Projects/utu"),
+            "Users-kevin-Projects-utu"
+        );
+        assert_eq!(
+            cursor_project_dirname("/Users/kevin/Projects/Hello, World"),
+            "Users-kevin-Projects-Hello--World"
+        );
+    }
+
+    #[test]
     fn filesystem_root_is_not_an_importable_project() {
         assert!(!is_importable_project_root("/"));
         assert!(!is_importable_project_root("/tmp"));
@@ -1045,7 +1086,8 @@ mod tests {
         let canonical = project.canonicalize().unwrap();
         let canonical_root = canonical.to_string_lossy().into_owned();
         let roots = fixture.roots();
-        let encoded = claude_project_dirname(&canonical_root);
+        // Cursor uses cursor_project_dirname (no leading dash), not claude_project_dirname.
+        let encoded = cursor_project_dirname(&canonical_root);
         let transcripts = roots
             .cursor_projects
             .join(&encoded)

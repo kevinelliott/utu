@@ -27,11 +27,11 @@ use utu_core::{EvidenceKind, MessageRole, Session};
 use utu_store::{NewMessage, Store};
 
 use crate::{
-    agent_sessions::{SessionRoots, claude_project_dir, parse_rfc3339_utc_millis},
+    agent_sessions::{SessionRoots, claude_project_dir, cursor_project_dir, parse_rfc3339_utc_millis},
     clock::unix_ms,
     codex_commands::CODEX_AGENT_ID,
     ids::deterministic_id,
-    session_sync::CLAUDE_AGENT_ID,
+    session_sync::{CLAUDE_AGENT_ID, CURSOR_AGENT_ID},
 };
 
 const MAX_MESSAGES: usize = 500;
@@ -55,6 +55,8 @@ pub fn import_transcript(store: &Store, session: &Session, roots: &SessionRoots)
         import_claude_transcript(store, session, provider_session_id, roots)
     } else if session.agent_id == CODEX_AGENT_ID {
         import_codex_transcript(store, session, provider_session_id, roots)
+    } else if session.agent_id == CURSOR_AGENT_ID {
+        import_cursor_transcript(store, session, provider_session_id, roots)
     } else {
         0
     }
@@ -355,6 +357,136 @@ fn extract_codex_body(items: &[CodexContentItem]) -> String {
         .join("\n")
 }
 
+// ─── Cursor Agent ─────────────────────────────────────────────────────────────
+
+fn import_cursor_transcript(
+    store: &Store,
+    session: &Session,
+    provider_session_id: &str,
+    roots: &SessionRoots,
+) -> u32 {
+    let project_root = match project_root_for_session(store, session) {
+        Some(root) => root,
+        None => return 0,
+    };
+    // Cursor transcript: ~/.cursor/projects/<cursor-encoded>/<agent-transcripts>/<uuid>/<uuid>.jsonl
+    let path = cursor_project_dir(roots, &project_root)
+        .join("agent-transcripts")
+        .join(provider_session_id)
+        .join(format!("{provider_session_id}.jsonl"));
+    if !path.is_file() {
+        return 0;
+    }
+    persist_cursor_messages(store, session, &path)
+}
+
+fn persist_cursor_messages(store: &Store, session: &Session, path: &Path) -> u32 {
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(_) => return 0,
+    };
+    let reader = BufReader::new(file);
+    let now = unix_ms();
+    let mut imported = 0u32;
+
+    for line in reader.lines() {
+        if imported as usize >= MAX_MESSAGES {
+            break;
+        }
+        let line = match line {
+            Ok(l) if !l.trim().is_empty() => l,
+            _ => continue,
+        };
+        let entry: CursorEntry = match serde_json::from_str(&line) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let (role, author_agent_id) = match entry.role.as_str() {
+            "user" => (MessageRole::Owner, None),
+            "assistant" => (MessageRole::Agent, Some(session.agent_id.clone())),
+            _ => continue,
+        };
+        let Some(msg) = entry.message else { continue };
+        let body = extract_cursor_body(&msg.content);
+        let body = body.trim().to_owned();
+        if body.is_empty() {
+            continue;
+        }
+        let body = truncate_body(body);
+        let id = deterministic_id(
+            "transcript-msg",
+            &format!("{}:{}", session.id, imported),
+        );
+        let new = NewMessage {
+            id,
+            session_id: session.id.clone(),
+            role,
+            author_agent_id,
+            body,
+            sent_at_unix_ms: now,
+            ingested_at_unix_ms: now,
+            evidence: EvidenceKind::Observed,
+            source: "transcript.cursor".into(),
+            correlation_id: None,
+        };
+        match store.append_message(new) {
+            Ok(_) => imported += 1,
+            Err(_) => break,
+        }
+    }
+    imported
+}
+
+// ─── Cursor entry structs ──────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct CursorEntry {
+    role: String,
+    message: Option<CursorMessage>,
+}
+
+#[derive(Deserialize)]
+struct CursorMessage {
+    #[serde(default)]
+    content: Vec<CursorContentPart>,
+}
+
+#[derive(Deserialize)]
+struct CursorContentPart {
+    #[serde(rename = "type")]
+    kind: String,
+    text: Option<String>,
+}
+
+/// Extracts human-readable text from Cursor message content.
+///
+/// Text parts may contain XML-like tags inserted by the Cursor IDE:
+/// `<timestamp>...</timestamp>` and `<user_query>...</user_query>`.  When a
+/// `<user_query>` tag is present we extract only its body; otherwise the raw
+/// text is returned with the timestamp wrapper stripped.
+fn extract_cursor_body(parts: &[CursorContentPart]) -> String {
+    parts
+        .iter()
+        .filter(|part| part.kind == "text")
+        .filter_map(|part| part.text.as_deref())
+        .map(|text| {
+            // Prefer the <user_query> body when present.
+            if let Some(start) = text.find("<user_query>") {
+                let after = &text[start + "<user_query>".len()..];
+                let end = after.find("</user_query>").unwrap_or(after.len());
+                return after[..end].trim().to_owned();
+            }
+            // Strip <timestamp>...</timestamp> wrapper if present.
+            if let Some(ts_end) = text.find("</timestamp>") {
+                return text[ts_end + "</timestamp>".len()..].trim().to_owned();
+            }
+            text.to_owned()
+        })
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 fn project_root_for_session(store: &Store, session: &Session) -> Option<String> {
@@ -641,5 +773,85 @@ mod tests {
         let truncated = truncate_body(body);
         assert!(truncated.len() <= MAX_BODY_BYTES + 20);
         assert!(truncated.is_char_boundary(0));
+    }
+
+    #[test]
+    fn cursor_jsonl_imports_user_and_assistant_turns() {
+        let fixture = Fixture::new();
+        let root = fixture.project_root();
+        let store = seeded_store(&root, CURSOR_AGENT_ID);
+        let roots = fixture.roots();
+        let session = make_session(CURSOR_AGENT_ID);
+
+        let transcript_dir = crate::agent_sessions::cursor_project_dir(&roots, &root.to_string_lossy())
+            .join("agent-transcripts")
+            .join("test-session-id");
+        fs::create_dir_all(&transcript_dir).unwrap();
+        fs::write(
+            transcript_dir.join("test-session-id.jsonl"),
+            concat!(
+                r#"{"role":"user","message":{"content":[{"type":"text","text":"<user_query>\nFix the bug\n</user_query>"}]}}"#, "\n",
+                r#"{"role":"assistant","message":{"content":[{"type":"text","text":"I'll fix it."},{"type":"tool_use","name":"Read","input":{}}]}}"#, "\n",
+                r#"{"role":"user","message":{"content":[{"type":"text","text":"Thanks!"}]}}"#, "\n",
+            ),
+        )
+        .unwrap();
+
+        let imported = import_transcript(&store, &session, &roots);
+        assert_eq!(imported, 3);
+
+        let query = utu_store::StreamQuery { after_sequence: None, limit: 10 };
+        let projection = store
+            .read_session_projection("session", query, query, 10)
+            .unwrap()
+            .unwrap();
+        assert_eq!(projection.messages.len(), 3);
+        assert_eq!(projection.messages[0].body, "Fix the bug");
+        assert_eq!(projection.messages[0].role, utu_core::MessageRole::Owner);
+        assert_eq!(projection.messages[1].body, "I'll fix it.");
+        assert_eq!(projection.messages[1].role, utu_core::MessageRole::Agent);
+        assert_eq!(
+            projection.messages[1].author_agent_id.as_deref(),
+            Some(CURSOR_AGENT_ID)
+        );
+        assert_eq!(projection.messages[2].body, "Thanks!");
+    }
+
+    #[test]
+    fn cursor_user_query_tag_extraction() {
+        let parts = vec![
+            CursorContentPart {
+                kind: "text".into(),
+                text: Some(
+                    "<timestamp>Aug 13</timestamp>\n<user_query>\nRefactor the auth module\n</user_query>"
+                        .into(),
+                ),
+            },
+        ];
+        assert_eq!(extract_cursor_body(&parts), "Refactor the auth module");
+    }
+
+    #[test]
+    fn cursor_body_strips_timestamp_without_user_query() {
+        let parts = vec![CursorContentPart {
+            kind: "text".into(),
+            text: Some("<timestamp>Aug 13</timestamp>\nPlain follow-up".into()),
+        }];
+        assert_eq!(extract_cursor_body(&parts), "Plain follow-up");
+    }
+
+    #[test]
+    fn cursor_tool_use_parts_are_skipped() {
+        let parts = vec![
+            CursorContentPart {
+                kind: "text".into(),
+                text: Some("Hello".into()),
+            },
+            CursorContentPart {
+                kind: "tool_use".into(),
+                text: None,
+            },
+        ];
+        assert_eq!(extract_cursor_body(&parts), "Hello");
     }
 }
