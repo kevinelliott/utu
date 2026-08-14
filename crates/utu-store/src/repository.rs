@@ -807,10 +807,11 @@ impl Store {
         ensure_session_dependents_match_scope(&transaction, session)?;
         transaction.execute(
             "INSERT INTO sessions (id, project_id, task_id, agent_id, provider_session_id, state, \
-                 started_at_unix_ms, last_observed_at_unix_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+                 started_at_unix_ms, last_observed_at_unix_ms, title_hint) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
              ON CONFLICT(id) DO UPDATE SET project_id=excluded.project_id, task_id=excluded.task_id, \
                  agent_id=excluded.agent_id, provider_session_id=excluded.provider_session_id, \
-                 state=excluded.state, last_observed_at_unix_ms=excluded.last_observed_at_unix_ms",
+                 state=excluded.state, last_observed_at_unix_ms=excluded.last_observed_at_unix_ms, \
+                 title_hint=COALESCE(excluded.title_hint, title_hint)",
             params![
                 session.id,
                 session.project_id,
@@ -819,7 +820,8 @@ impl Store {
                 session.provider_session_id,
                 session.state.db_value(),
                 started_at,
-                last_observed
+                last_observed,
+                session.title_hint
             ],
         )?;
         transaction.commit()?;
@@ -830,7 +832,7 @@ impl Store {
         let connection = self.connection()?;
         let mut statement = connection.prepare(
             "SELECT id, project_id, task_id, agent_id, provider_session_id, state, \
-             started_at_unix_ms, last_observed_at_unix_ms FROM sessions WHERE id = ?1",
+             started_at_unix_ms, last_observed_at_unix_ms, title_hint FROM sessions WHERE id = ?1",
         )?;
         let mut rows = statement.query([id])?;
         rows.next()?.map(decode_session).transpose()
@@ -840,7 +842,7 @@ impl Store {
         let connection = self.connection()?;
         let mut statement = connection.prepare(
             "SELECT id, project_id, task_id, agent_id, provider_session_id, state, \
-             started_at_unix_ms, last_observed_at_unix_ms FROM sessions \
+             started_at_unix_ms, last_observed_at_unix_ms, title_hint FROM sessions \
              WHERE (?1 IS NULL OR project_id = ?1) ORDER BY started_at_unix_ms DESC, id",
         )?;
         collect_rows(statement.query([project_id])?, decode_session)
@@ -1675,7 +1677,7 @@ fn read_workspace_projection_on(
     let sessions = {
         let mut statement = connection.prepare(
             "SELECT id, project_id, task_id, agent_id, provider_session_id, state, \
-             started_at_unix_ms, last_observed_at_unix_ms FROM sessions \
+             started_at_unix_ms, last_observed_at_unix_ms, title_hint FROM sessions \
              WHERE (?1 IS NULL OR project_id = ?1) ORDER BY started_at_unix_ms DESC, id",
         )?;
         collect_rows(statement.query([project_id])?, decode_session)?
@@ -1734,7 +1736,7 @@ fn read_session_projection_on(
     let session = {
         let mut statement = connection.prepare(
             "SELECT id, project_id, task_id, agent_id, provider_session_id, state, \
-             started_at_unix_ms, last_observed_at_unix_ms FROM sessions WHERE id = ?1",
+             started_at_unix_ms, last_observed_at_unix_ms, title_hint FROM sessions WHERE id = ?1",
         )?;
         let mut rows = statement.query([session_id])?;
         rows.next()?.map(decode_session).transpose()?
@@ -2005,6 +2007,7 @@ fn decode_session(row: &Row<'_>) -> Result<Session> {
         state: AgentState::from_db(&row.get::<_, String>(5)?)?,
         started_at_unix_ms: to_u64(row.get(6)?, "started_at_unix_ms")?,
         last_observed_at_unix_ms: optional_to_u64(row.get(7)?, "last_observed_at_unix_ms")?,
+        title_hint: row.get(8)?,
     })
 }
 

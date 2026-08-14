@@ -2,9 +2,9 @@ use leptos::{prelude::*, task::spawn_local};
 
 use crate::{
     components::{
-        AgentAvatar, AppMarkGlyph, DemoBadge, ICON_ATTENTION, ICON_CLOSE, ICON_COMMAND, ICON_COST,
-        ICON_FOLDER, ICON_HOME, ICON_NODES, ICON_PLUG, ICON_PLUS, ICON_SEARCH, ICON_SETTINGS, Icon,
-        StatusDot, WorkspaceNav,
+        AgentAvatar, AgentCliIcon, AppMarkGlyph, DemoBadge, ICON_ATTENTION, ICON_CLOSE,
+        ICON_COMMAND, ICON_COST, ICON_FOLDER, ICON_HOME, ICON_NODES, ICON_PLUG, ICON_PLUS,
+        ICON_SEARCH, ICON_SETTINGS, Icon, StatusDot, WorkspaceNav,
     },
     ipc,
     views::{
@@ -827,6 +827,7 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
                                                 let detail = session_detail(&snapshot, &session, false);
                                                 let state = session.state.clone();
                                                 let tone = session_state_tone(&session.state);
+                                                let agent_display = snapshot.agents.iter().find(|a| a.id == session.agent_id).map(|a| a.display_name.clone()).unwrap_or_else(|| session.agent_id.clone());
                                                 view! {
                                                     <button
                                                         class=move || if live.selected_session_id.get().as_deref() == Some(selected_id.as_str()) { "live-session-row is-selected" } else { "live-session-row" }
@@ -837,6 +838,7 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
                                                         }
                                                     >
                                                         <span class="live-task-state"><StatusDot tone /></span>
+                                                        <AgentCliIcon agent_id=session.agent_id.clone() display_name=agent_display />
                                                         <span><strong>{title}</strong><small>{detail}</small></span>
                                                         <span class=move || format!("state-label {tone}")>{state}</span>
                                                     </button>
@@ -933,6 +935,7 @@ fn LiveFleetView(inspector_open: RwSignal<bool>) -> impl IntoView {
                                         let detail = session_detail(&snapshot, &session, true);
                                         let state = session.state.clone();
                                         let row_tone = session_state_tone(&session.state);
+                                        let agent_display = snapshot.agents.iter().find(|a| a.id == session.agent_id).map(|a| a.display_name.clone()).unwrap_or_else(|| session.agent_id.clone());
                                         view! {
                                             <button
                                                 class=move || if live.selected_session_id.get().as_deref() == Some(selected_id.as_str()) { "live-record-row live-session-row is-selected" } else { "live-record-row live-session-row" }
@@ -944,6 +947,7 @@ fn LiveFleetView(inspector_open: RwSignal<bool>) -> impl IntoView {
                                                 }
                                             >
                                                 <span class="live-record-mark"><StatusDot tone=row_tone /></span>
+                                                <AgentCliIcon agent_id=session.agent_id.clone() display_name=agent_display />
                                                 <span><strong>{title}</strong><small>{detail}</small></span>
                                                 <span class=move || format!("state-label {row_tone}")>{state}</span>
                                             </button>
@@ -1400,9 +1404,12 @@ fn WorkspaceContext(read_only: bool) -> impl IntoView {
                     let title = session_title(&snapshot, &session);
                     let detail = session_detail(&snapshot, &session, false);
                     let tone = session_state_tone(&session.state);
+                    let agent_display = snapshot.agents.iter().find(|a| a.id == session.agent_id).map(|a| a.display_name.clone()).unwrap_or_else(|| session.agent_id.clone());
                     view! {
                         <button class=move || if live.selected_session_id.get().as_deref() == Some(session_id.as_str()) { "session-context-row is-selected" } else { "session-context-row" } type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SelectSession(session_id_action.clone()))>
-                            <span class="session-state"><StatusDot tone /></span><span><strong>{title}</strong><small>{detail}" · "{session.state.clone()}</small></span>
+                            <span class="session-state"><StatusDot tone /></span>
+                            <AgentCliIcon agent_id=session.agent_id.clone() display_name=agent_display />
+                            <span><strong>{title}</strong><small>{detail}" · "{session.state.clone()}</small></span>
                         </button>
                     }
                 }).collect_view().into_any()})}

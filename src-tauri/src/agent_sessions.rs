@@ -17,16 +17,20 @@ use utu_core::AgentState;
 
 pub const CLAUDE_PROVIDER_ID: &str = "claude";
 pub const CODEX_PROVIDER_ID: &str = "codex";
+pub const CURSOR_PROVIDER_ID: &str = "cursor";
 const MAX_SESSION_ID_BYTES: usize = 512;
 const MAX_CWD_BYTES: usize = 16 * 1024;
 const MAX_INDEX_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_META_LINE_BYTES: usize = 64 * 1024;
+const MAX_TITLE_HINT_CHARS: usize = 80;
+const MAX_TRANSCRIPT_FIRST_LINE_BYTES: usize = 16 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SessionRoots {
     pub claude_projects: PathBuf,
     pub codex_sessions: PathBuf,
     pub codex_auth: PathBuf,
+    pub cursor_projects: PathBuf,
 }
 
 impl SessionRoots {
@@ -36,6 +40,7 @@ impl SessionRoots {
             claude_projects: home.join(".claude").join("projects"),
             codex_sessions: home.join(".codex").join("sessions"),
             codex_auth: home.join(".codex").join("auth.json"),
+            cursor_projects: home.join(".cursor").join("projects"),
         }
     }
 
@@ -56,6 +61,7 @@ pub struct ObservedSession {
     pub started_at_unix_ms: u64,
     pub last_observed_at_unix_ms: u64,
     pub state: AgentState,
+    pub title_hint: Option<String>,
 }
 
 pub fn claude_project_dirname(canonical_root: &str) -> String {
@@ -106,6 +112,7 @@ pub fn list_claude_sessions(
             started_at_unix_ms: observed_at,
             last_observed_at_unix_ms: observed_at,
             state: claude_state_from_mtime(observed_at),
+            title_hint: None,
         });
     }
     Ok(sessions)
@@ -159,6 +166,7 @@ pub fn list_all_claude_sessions(
                         started_at_unix_ms: session.started_at_unix_ms,
                         last_observed_at_unix_ms: session.last_observed_at_unix_ms,
                         state: claude_state_from_mtime(session.last_observed_at_unix_ms),
+                        title_hint: None,
                     });
             }
         }
@@ -186,6 +194,7 @@ pub fn list_all_claude_sessions(
                     started_at_unix_ms: observed_at,
                     last_observed_at_unix_ms: observed_at,
                     state: claude_state_from_mtime(observed_at),
+                    title_hint: None,
                 });
         }
     }
@@ -226,6 +235,191 @@ pub fn watched_codex_paths(roots: &SessionRoots) -> Vec<PathBuf> {
     vec![roots.codex_sessions.clone(), roots.codex_auth.clone()]
 }
 
+/// Cursor encodes project paths by replacing all non-alphanumeric characters
+/// with `-`, then stripping leading hyphens. The leading `/` in an absolute
+/// path becomes a leading `-` under Claude's scheme, but Cursor omits it.
+/// For example `/Users/kevin/Projects/utu` → `Users-kevin-Projects-utu`.
+pub fn cursor_project_dirname(canonical_root: &str) -> String {
+    canonical_root
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>()
+        .trim_start_matches('-')
+        .to_owned()
+}
+
+pub fn cursor_project_dir(roots: &SessionRoots, canonical_root: &str) -> PathBuf {
+    roots
+        .cursor_projects
+        .join(cursor_project_dirname(canonical_root))
+}
+
+pub fn list_all_cursor_sessions(
+    roots: &SessionRoots,
+) -> Result<HashMap<String, Vec<ObservedSession>>, String> {
+    let mut by_root: HashMap<String, Vec<ObservedSession>> = HashMap::new();
+    if !roots.cursor_projects.is_dir() {
+        return Ok(by_root);
+    }
+    for project_dir in read_dir_dirs(&roots.cursor_projects)? {
+        let encoded = project_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        if encoded.is_empty() {
+            continue;
+        }
+        let transcripts_dir = project_dir.join("agent-transcripts");
+        if !transcripts_dir.is_dir() {
+            continue;
+        }
+        let cwd = resolve_cursor_encoded_dirname(encoded);
+        for uuid_dir in read_dir_dirs(&transcripts_dir)? {
+            let uuid_name = uuid_dir
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_owned();
+            if uuid_name.is_empty() || !valid_provider_id(&uuid_name) {
+                continue;
+            }
+            let jsonl_path = uuid_dir.join(format!("{uuid_name}.jsonl"));
+            if !jsonl_path.is_file() {
+                continue;
+            }
+            let file_mtime = file_mtime_ms(&jsonl_path).unwrap_or_else(unix_ms);
+            let title_hint = extract_cursor_title_hint(&jsonl_path);
+            let session_cwd = cwd.clone().unwrap_or_else(|| encoded.to_owned());
+            by_root
+                .entry(session_cwd.clone())
+                .or_default()
+                .push(ObservedSession {
+                    provider_id: CURSOR_PROVIDER_ID,
+                    provider_session_id: uuid_name,
+                    canonical_cwd: session_cwd,
+                    started_at_unix_ms: file_mtime,
+                    last_observed_at_unix_ms: file_mtime,
+                    state: cursor_state_from_mtime(file_mtime),
+                    title_hint,
+                });
+        }
+    }
+    Ok(by_root)
+}
+
+/// Extract a human-readable title from the first user message in a Cursor
+/// `.jsonl` transcript. Cursor transcripts are newline-delimited JSON; the
+/// first line that contains a user message is a good title source.
+fn extract_cursor_title_hint(path: &Path) -> Option<String> {
+    let file = File::open(path).ok()?;
+    let mut reader = BufReader::new(file);
+    for _ in 0..20 {
+        let mut line_bytes = Vec::new();
+        let read = reader.read_until(b'\n', &mut line_bytes).ok()?;
+        if read == 0 || line_bytes.len() > MAX_TRANSCRIPT_FIRST_LINE_BYTES {
+            break;
+        }
+        let line = String::from_utf8(line_bytes).ok()?;
+        if let Some(text) = extract_user_text_from_cursor_line(&line) {
+            return Some(truncate_title(&text));
+        }
+    }
+    None
+}
+
+fn extract_user_text_from_cursor_line(line: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    let role = v.get("role").and_then(|r| r.as_str());
+    if role == Some("user") {
+        // Cursor stores content under message.content (nested) or top-level content.
+        let content = v
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .or_else(|| v.get("content"));
+        if let Some(content) = content {
+            let raw = if let Some(s) = content.as_str() {
+                s.to_owned()
+            } else if let Some(arr) = content.as_array() {
+                arr.iter()
+                    .filter_map(|part| {
+                        if part.get("type").and_then(|t| t.as_str()) == Some("text") {
+                            part.get("text").and_then(|t| t.as_str()).map(|s| s.to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            } else {
+                String::new()
+            };
+            if !raw.trim().is_empty() {
+                let text = extract_user_query_tag(&raw).unwrap_or_else(|| strip_xml_tags(&raw));
+                if !text.trim().is_empty() {
+                    return Some(text);
+                }
+            }
+        }
+    }
+    // Also try a top-level `body` field containing a `<user_query>` tag.
+    if let Some(body) = v.get("body").and_then(|b| b.as_str()) {
+        if let Some(text) = extract_user_query_tag(body) {
+            return Some(text);
+        }
+    }
+    None
+}
+
+/// Extracts the content of the first `<user_query>` tag from a string.
+fn extract_user_query_tag(text: &str) -> Option<String> {
+    let start = text.find("<user_query>")?;
+    let after = &text[start + "<user_query>".len()..];
+    let end = after.find("</user_query>").unwrap_or(after.len());
+    let extracted = after[..end].trim().to_owned();
+    if extracted.is_empty() {
+        None
+    } else {
+        Some(extracted)
+    }
+}
+
+/// Strips XML/HTML-like tags from text, returning only the text content.
+fn strip_xml_tags(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut in_tag = false;
+    for ch in text.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => result.push(c),
+            _ => {}
+        }
+    }
+    result.trim().to_owned()
+}
+
+fn truncate_title(text: &str) -> String {
+    let trimmed = text.trim();
+    let collected: String = trimmed.chars().take(MAX_TITLE_HINT_CHARS).collect();
+    if collected.len() < trimmed.chars().count() {
+        format!("{}…", collected.trim_end())
+    } else {
+        collected
+    }
+}
+
+fn cursor_state_from_mtime(last_observed_at_unix_ms: u64) -> AgentState {
+    if unix_ms().saturating_sub(last_observed_at_unix_ms) <= 30_000 {
+        AgentState::Running
+    } else {
+        AgentState::Idle
+    }
+}
+
+pub fn watched_cursor_paths(roots: &SessionRoots) -> Vec<PathBuf> {
+    vec![roots.cursor_projects.clone()]
+}
+
 fn parse_claude_index(path: &Path, canonical_root: &str) -> Result<Vec<ObservedSession>, String> {
     let mut sessions = Vec::new();
     for entry in parse_claude_index_entries(path)? {
@@ -241,6 +435,7 @@ fn parse_claude_index(path: &Path, canonical_root: &str) -> Result<Vec<ObservedS
             started_at_unix_ms: entry.started_at_unix_ms,
             last_observed_at_unix_ms: entry.last_observed_at_unix_ms,
             state: claude_state_from_mtime(entry.last_observed_at_unix_ms),
+            title_hint: None,
         });
     }
     Ok(sessions)
@@ -372,6 +567,7 @@ fn parse_codex_rollout_meta(path: &Path) -> Result<Option<ObservedSession>, Stri
         started_at_unix_ms: started.min(file_mtime),
         last_observed_at_unix_ms: file_mtime,
         state: claude_state_from_mtime(file_mtime),
+        title_hint: None,
     }))
 }
 
@@ -420,6 +616,21 @@ fn read_dir_dirs(dir: &Path) -> Result<Vec<PathBuf>, String> {
         }
     }
     Ok(dirs)
+}
+
+/// Resolves a Cursor-encoded project directory name back to a canonical path.
+/// Cursor encodes paths without a leading separator, so `Users-kevin-Projects-utu`
+/// corresponds to `/Users/kevin/Projects/utu`. We prepend `-` to recover the
+/// Claude-style encoding before delegating to `resolve_claude_encoded_dirname`.
+fn resolve_cursor_encoded_dirname(encoded: &str) -> Option<String> {
+    if encoded.is_empty() {
+        return None;
+    }
+    // Skip purely numeric or UUID-style names that Cursor uses for non-project windows.
+    if encoded.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+        return None;
+    }
+    resolve_claude_encoded_dirname(&format!("-{encoded}"))
 }
 
 fn resolve_claude_encoded_dirname(encoded: &str) -> Option<String> {
@@ -774,6 +985,84 @@ mod tests {
             claude_project_dirname("/Users/kevin/Projects/utu"),
             "-Users-kevin-Projects-utu"
         );
+    }
+
+    #[test]
+    fn cursor_dirname_strips_leading_separator_unlike_claude() {
+        // Cursor drops the leading "/" separator; Claude keeps it as "-".
+        assert_eq!(
+            cursor_project_dirname("/Users/kevin/Projects/utu"),
+            "Users-kevin-Projects-utu"
+        );
+        assert_eq!(
+            cursor_project_dirname("/Users/kevin/Projects/Hello, World"),
+            "Users-kevin-Projects-Hello--World"
+        );
+    }
+
+    #[test]
+    fn cursor_sessions_discovered_for_project_with_transcripts() {
+        let fixture = Fixture::new();
+        // Create the project directory and canonicalize it to get the real path
+        // (macOS /var is a symlink to /private/var; canonicalize resolves it).
+        let project = fixture.0.join("repo");
+        fs::create_dir_all(&project).unwrap();
+        let canonical = project.canonicalize().unwrap();
+        let canonical_root = canonical.to_string_lossy().into_owned();
+
+        // Build roots anchored to the CANONICAL fixture root so that paths
+        // used for directory creation and discovery are consistent.
+        let canonical_home = fixture.0.canonicalize().unwrap();
+        let roots = SessionRoots::from_home(&canonical_home);
+
+        // Create Cursor-style project dir (no leading dash) using the
+        // canonical project path that the scanner will also compute.
+        let encoded = cursor_project_dirname(&canonical_root);
+        let uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        let transcript_dir = roots
+            .cursor_projects
+            .join(&encoded)
+            .join("agent-transcripts")
+            .join(uuid);
+        fs::create_dir_all(&transcript_dir).unwrap();
+
+        // Write a Cursor-format transcript with nested message.content.
+        fs::write(
+            transcript_dir.join(format!("{uuid}.jsonl")),
+            serde_json::json!({
+                "role": "user",
+                "message": {
+                    "content": [{"type": "text", "text": "<user_query>\nFix the bug\n</user_query>"}]
+                }
+            })
+            .to_string()
+                + "\n",
+        )
+        .unwrap();
+
+        let sessions = list_all_cursor_sessions(&roots).unwrap();
+        let project_sessions = sessions.get(&canonical_root).expect("sessions for project");
+        assert_eq!(project_sessions.len(), 1);
+        assert_eq!(project_sessions[0].provider_session_id, uuid);
+        assert_eq!(project_sessions[0].provider_id, CURSOR_PROVIDER_ID);
+        assert_eq!(project_sessions[0].canonical_cwd, canonical_root);
+        assert_eq!(
+            project_sessions[0].title_hint.as_deref(),
+            Some("Fix the bug")
+        );
+    }
+
+    #[test]
+    fn cursor_title_hint_extracted_from_user_query_tag() {
+        let line = serde_json::json!({
+            "role": "user",
+            "message": {
+                "content": [{"type": "text", "text": "<timestamp>now</timestamp>\n<user_query>\nRefactor the session sync\n</user_query>"}]
+            }
+        })
+        .to_string();
+        let result = extract_user_text_from_cursor_line(&line);
+        assert_eq!(result.as_deref(), Some("Refactor the session sync"));
     }
 
     #[test]

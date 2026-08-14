@@ -14,7 +14,7 @@ use utu_connectors::{DiagnosticReport, diagnose_known_connectors};
 use utu_store::Store;
 
 use crate::{
-    agent_sessions::{SessionRoots, watched_claude_paths, watched_codex_paths},
+    agent_sessions::{SessionRoots, watched_claude_paths, watched_codex_paths, watched_cursor_paths},
     clock::unix_ms,
     codex_commands::canonical_stored_project_root,
     codex_runtime::CodexRuntime,
@@ -205,8 +205,11 @@ impl SessionSupervisor {
         let canonical_roots = self.canonical_project_roots();
         let mut paths = watched_claude_paths(&self.roots, &canonical_roots);
         paths.extend(watched_codex_paths(&self.roots));
+        paths.extend(watched_cursor_paths(&self.roots));
         for path in paths {
-            let mode = if path == self.roots.codex_sessions {
+            let mode = if path == self.roots.codex_sessions
+                || path == self.roots.cursor_projects
+            {
                 RecursiveMode::Recursive
             } else {
                 RecursiveMode::NonRecursive
@@ -261,7 +264,9 @@ impl SessionSupervisor {
 }
 
 pub fn path_is_session_source(roots: &SessionRoots, path: &Path) -> bool {
-    path_is_under(&roots.claude_projects, path) || path_is_under(&roots.codex_sessions, path)
+    path_is_under(&roots.claude_projects, path)
+        || path_is_under(&roots.codex_sessions, path)
+        || path_is_under(&roots.cursor_projects, path)
 }
 
 fn path_is_under(root: &PathBuf, path: &Path) -> bool {
@@ -282,6 +287,12 @@ mod tests {
         assert!(path_is_session_source(
             &roots,
             &roots.codex_sessions.join("2026/rollout.jsonl")
+        ));
+        assert!(path_is_session_source(
+            &roots,
+            &roots
+                .cursor_projects
+                .join("Users-kevin-Projects-utu/agent-transcripts/abc/abc.jsonl")
         ));
         assert!(!path_is_session_source(
             &roots,

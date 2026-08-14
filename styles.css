@@ -612,6 +612,28 @@ h3 {
   box-shadow: inset 0 0 0 1px rgb(24 34 31 / 9%);
 }
 
+.agent-cli-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+.agent-logo {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* Brand-approximate tints for each provider */
+.agent-icon-claude  { color: #c47b50; }
+.agent-icon-openai  { color: #19191c; }
+.agent-icon-cursor  { color: #1872f2; }
+.agent-icon-gemini  { color: #4285f4; }
+.agent-icon-grok    { color: #111; }
+.agent-icon-agent   { color: var(--fg-subtle, #6b7280); }
+
 .avatar-xs { width: 18px; height: 18px; font-size: 6.5px; }
 .avatar-sm { width: 26px; height: 26px; font-size: 8px; }
 .avatar-md { width: 34px; height: 34px; font-size: 10px; }

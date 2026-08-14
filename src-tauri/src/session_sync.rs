@@ -15,8 +15,9 @@ use utu_store::Store;
 
 use crate::{
     agent_sessions::{
-        self, ObservedSession, SessionRoots, list_all_claude_sessions,
-        list_all_codex_file_sessions, list_claude_sessions, list_codex_file_sessions,
+        self, CURSOR_PROVIDER_ID, ObservedSession, SessionRoots, list_all_claude_sessions,
+        list_all_codex_file_sessions, list_all_cursor_sessions, list_claude_sessions,
+        list_codex_file_sessions,
     },
     clock::unix_ms,
     codex_commands::{
@@ -33,6 +34,8 @@ pub(crate) const CLAUDE_PROVIDER_ID: &str = "claude";
 pub(crate) const CLAUDE_DIAGNOSTIC_INTEGRATION_ID: &str = "claude";
 pub(crate) const CLAUDE_TRANSPORT_INTEGRATION_ID: &str = "claude-sessions";
 pub(crate) const CLAUDE_AGENT_ID: &str = "claude-code";
+pub(crate) const CURSOR_AGENT_ID: &str = "cursor-agent";
+pub(crate) const CURSOR_TRANSPORT_INTEGRATION_ID: &str = "cursor-sessions";
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -125,8 +128,15 @@ pub(crate) fn import_ready_agent_sessions(
     };
     let claude_by_root = list_all_claude_sessions(roots)?;
     let codex_by_root = list_all_codex_file_sessions(roots)?;
+    let cursor_by_root = list_all_cursor_sessions(roots)?;
     let projects = if discover_roots {
-        ensure_projects_for_roots(store, claude_by_root.keys().chain(codex_by_root.keys()))?;
+        ensure_projects_for_roots(
+            store,
+            claude_by_root
+                .keys()
+                .chain(codex_by_root.keys())
+                .chain(cursor_by_root.keys()),
+        )?;
         store
             .list_projects()
             .map_err(|error| error.to_string())?
@@ -177,61 +187,74 @@ pub(crate) fn import_ready_agent_sessions(
                 {
                     prepare_codex_observation(store)?;
                 }
-                let mut imported = 0;
+                let mut imported: u32 = 0;
                 let mut server_version = None;
                 let mut app_server_error = None;
                 for project in &projects {
                     let Ok(cwd) = canonical_stored_project_root(project) else {
                         continue;
                     };
-                    imported += persist_observed_for_project(
-                        store,
-                        project,
-                        CODEX_AGENT_ID,
-                        "codex-session",
-                        &codex_by_root,
-                    )?;
-                    if !attach_app_server {
-                        continue;
-                    }
-                    match runtime.connect_and_list(codex_path.clone(), &cwd) {
-                        Ok((observed_version, threads)) => {
-                            if let Some(expected) = server_version.as_deref()
-                                && expected != observed_version
-                            {
-                                runtime.revoke_all();
-                                return Err(
-                                    "Codex App Server identity changed during synchronization"
-                                        .into(),
+                    // When the App Server is attached, prefer its thread listing
+                    // over file-based session discovery. The App Server provides
+                    // richer metadata and its IDs may differ from rollout file
+                    // IDs, causing duplicate records if both sources are imported.
+                    // Only fall back to file sessions when the App Server fails.
+                    let mut app_server_ok = false;
+                    if attach_app_server {
+                        match runtime.connect_and_list(codex_path.clone(), &cwd) {
+                            Ok((observed_version, threads)) => {
+                                if let Some(expected) = server_version.as_deref()
+                                    && expected != observed_version
+                                {
+                                    runtime.revoke_all();
+                                    return Err(
+                                        "Codex App Server identity changed during synchronization"
+                                            .into(),
+                                    );
+                                }
+                                if server_version.is_none() {
+                                    codex_commands::prepare_codex_identity(
+                                        store,
+                                        &observed_version,
+                                    )?;
+                                    server_version = Some(observed_version.clone());
+                                }
+                                let persisted = persist_thread_metadata(
+                                    store,
+                                    &observed_version,
+                                    &threads,
+                                    project,
+                                    &cwd,
+                                )?;
+                                imported =
+                                    imported.saturating_add(persisted.summary.imported_sessions);
+                                runtime.replace_project_authorizations(
+                                    &project.id,
+                                    persisted.authorizations,
                                 );
+                                app_server_ok = true;
                             }
-                            if server_version.is_none() {
-                                codex_commands::prepare_codex_identity(store, &observed_version)?;
-                                server_version = Some(observed_version.clone());
+                            Err(error) => {
+                                app_server_error = Some(error.to_string());
                             }
-                            let persisted = persist_thread_metadata(
-                                store,
-                                &observed_version,
-                                &threads,
-                                project,
-                                &cwd,
-                            )?;
-                            imported = imported.saturating_add(persisted.summary.imported_sessions);
-                            runtime.replace_project_authorizations(
-                                &project.id,
-                                persisted.authorizations,
-                            );
                         }
-                        Err(error) => {
-                            app_server_error = Some(error.to_string());
-                        }
+                    }
+                    if !app_server_ok {
+                        // App Server not attached or failed — import from files.
+                        imported += persist_observed_for_project(
+                            store,
+                            project,
+                            CODEX_AGENT_ID,
+                            "codex-session",
+                            &codex_by_root,
+                        )?;
                     }
                 }
                 if attach_app_server {
                     if let Some(version) = server_version {
                         codex_commands::activate_codex_transport(store, &version)?;
                         codex.detail = app_server_error.map(|error| {
-                            format!("Codex files imported; App Server listing failed: {error}")
+                            format!("App Server synced; file fallback used for some projects: {error}")
                         });
                     } else {
                         activate_codex_observation(store)?;
@@ -253,7 +276,35 @@ pub(crate) fn import_ready_agent_sessions(
         }
     }
 
-    summary.agents = vec![codex, claude];
+    // Cursor IDE agent sessions are always imported from file system — no
+    // connector readiness check is required since we only observe, never write.
+    let mut cursor_summary = AgentSyncSummary {
+        agent_id: CURSOR_AGENT_ID.into(),
+        display_name: "Cursor".into(),
+        status: "skipped".into(),
+        imported_sessions: 0,
+        detail: None,
+    };
+    if !cursor_by_root.is_empty() {
+        prepare_cursor_identity(store)?;
+        let mut cursor_imported: u32 = 0;
+        for project in &projects {
+            cursor_imported = cursor_imported.saturating_add(persist_observed_for_project(
+                store,
+                project,
+                CURSOR_AGENT_ID,
+                "cursor-session",
+                &cursor_by_root,
+            )?);
+        }
+        cursor_summary.status = "synced".into();
+        cursor_summary.imported_sessions = cursor_imported;
+        summary.imported_sessions = summary
+            .imported_sessions
+            .saturating_add(cursor_imported);
+    }
+
+    summary.agents = vec![codex, claude, cursor_summary];
     Ok(summary)
 }
 
@@ -433,6 +484,7 @@ fn persist_observed_sessions(
                 .map(|session| session.started_at_unix_ms)
                 .unwrap_or(observed.started_at_unix_ms),
             last_observed_at_unix_ms: Some(observed.last_observed_at_unix_ms),
+            title_hint: observed.title_hint.clone(),
         };
         store
             .upsert_session(&session)
@@ -440,6 +492,18 @@ fn persist_observed_sessions(
         imported += 1;
     }
     Ok(imported)
+}
+
+fn prepare_cursor_identity(store: &Store) -> Result<(), String> {
+    ensure_observation_identity(
+        store,
+        CURSOR_PROVIDER_ID,
+        "Cursor",
+        CURSOR_TRANSPORT_INTEGRATION_ID,
+        "Cursor agent sessions",
+        CURSOR_AGENT_ID,
+        "Project-scoped Cursor agent metadata observation is not complete.",
+    )
 }
 
 fn prepare_claude_identity(store: &Store) -> Result<(), String> {

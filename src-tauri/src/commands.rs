@@ -420,6 +420,7 @@ pub async fn create_session(
             state: AgentState::Idle,
             started_at_unix_ms: unix_ms(),
             last_observed_at_unix_ms: None,
+            title_hint: None,
         };
         validate_session_relations(store, &session)?;
         store.upsert_session(&session).map_err(store_error)?;
@@ -1194,6 +1195,7 @@ mod tests {
                 state: AgentState::Idle,
                 started_at_unix_ms: 1,
                 last_observed_at_unix_ms: None,
+                title_hint: None,
             })
             .expect("session");
         let (request, receipt) =
@@ -1414,6 +1416,7 @@ mod tests {
                 state: AgentState::Idle,
                 started_at_unix_ms: 1,
                 last_observed_at_unix_ms: None,
+                title_hint: None,
             },
         );
         assert!(result.is_err());

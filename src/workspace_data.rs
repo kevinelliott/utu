@@ -688,6 +688,7 @@ fn format_sync_summary(summary: &SyncProjectSessionsSummary) -> String {
 }
 
 pub fn session_title(snapshot: &WorkspaceSnapshot, session: &SessionRecord) -> String {
+    // 1. Task title wins if this session is attached to a task.
     if let Some(title) = session.task_id.as_deref().and_then(|task_id| {
         snapshot
             .tasks
@@ -697,17 +698,14 @@ pub fn session_title(snapshot: &WorkspaceSnapshot, session: &SessionRecord) -> S
     }) {
         return title;
     }
-    let agent = snapshot
-        .agents
-        .iter()
-        .find(|agent| agent.id == session.agent_id)
-        .map(|agent| agent.display_name.as_str())
-        .unwrap_or("Agent");
+    // 2. Use the transcript-derived title hint when available.
+    if let Some(hint) = session.title_hint.as_deref().filter(|s| !s.is_empty()) {
+        return hint.to_owned();
+    }
+    // 3. Fall back to a short provider session ID — never include the agent name.
     match session.provider_session_id.as_deref() {
-        Some(provider_id) if !provider_id.is_empty() => {
-            format!("{agent} · {}", short_provider_id(provider_id))
-        }
-        _ => agent.to_owned(),
+        Some(provider_id) if !provider_id.is_empty() => short_provider_id(provider_id),
+        _ => "Untitled session".to_owned(),
     }
 }
 
@@ -716,16 +714,11 @@ pub fn session_detail(
     session: &SessionRecord,
     include_project: bool,
 ) -> String {
-    let agent = snapshot
-        .agents
-        .iter()
-        .find(|agent| agent.id == session.agent_id)
-        .map(|agent| agent.display_name.as_str())
-        .unwrap_or("Unknown agent");
     let observed = relative_unix_ms(
         snapshot.generated_at_unix_ms,
         session.last_observed_at_unix_ms,
     );
+    let state = &session.state;
     if include_project {
         let project = snapshot
             .projects
@@ -733,9 +726,9 @@ pub fn session_detail(
             .find(|project| project.id == session.project_id)
             .map(|project| project.name.as_str())
             .unwrap_or("Unknown project");
-        format!("{agent} · {project} · {observed}")
+        format!("{project} · {state} · {observed}")
     } else {
-        format!("{agent} · {observed}")
+        format!("{state} · {observed}")
     }
 }
 
