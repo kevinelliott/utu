@@ -3,6 +3,7 @@ use leptos::prelude::*;
 use crate::{
     app::AppView,
     components::{ICON_PLUG, Icon},
+    theme::{ThemeController, ThemePreference},
     workspace_data::{LiveStatus, WorkspaceAction, WorkspaceActionSink},
 };
 
@@ -11,6 +12,8 @@ pub fn SettingsView() -> impl IntoView {
     let live = expect_context::<LiveStatus>();
     let actions = expect_context::<WorkspaceActionSink>();
     let active_view = expect_context::<RwSignal<AppView>>();
+    let theme = expect_context::<ThemeController>();
+    let is_web = !live.is_desktop();
 
     view! {
         <div class="workspace-layout settings-layout">
@@ -20,6 +23,60 @@ pub fn SettingsView() -> impl IntoView {
                 </div>
             </header>
             <div class="settings-content">
+                <section class="settings-group">
+                    <h2>"Appearance"</h2>
+                    <div class="settings-rows">
+                        <div class="settings-row settings-row-action">
+                            <span class="settings-row-label">"Theme"</span>
+                            <span class="settings-row-value">
+                                {move || match theme.preference.get() {
+                                    ThemePreference::System => "System follows this device",
+                                    ThemePreference::Light => "Light",
+                                    ThemePreference::Dark => "Dark",
+                                }}
+                            </span>
+                            <div class="theme-switch" role="radiogroup" aria-label="Theme">
+                                <button
+                                    class="theme-option"
+                                    class:is-active=move || theme.preference.get() == ThemePreference::System
+                                    type="button"
+                                    role="radio"
+                                    aria-checked=move || theme.preference.get() == ThemePreference::System
+                                    on:click=move |_| theme.set(ThemePreference::System)
+                                >
+                                    "System"
+                                </button>
+                                <button
+                                    class="theme-option"
+                                    class:is-active=move || theme.preference.get() == ThemePreference::Light
+                                    type="button"
+                                    role="radio"
+                                    aria-checked=move || theme.preference.get() == ThemePreference::Light
+                                    on:click=move |_| theme.set(ThemePreference::Light)
+                                >
+                                    "Light"
+                                </button>
+                                <button
+                                    class="theme-option"
+                                    class:is-active=move || theme.preference.get() == ThemePreference::Dark
+                                    type="button"
+                                    role="radio"
+                                    aria-checked=move || theme.preference.get() == ThemePreference::Dark
+                                    on:click=move |_| theme.set(ThemePreference::Dark)
+                                >
+                                    "Dark"
+                                </button>
+                            </div>
+                        </div>
+                        <Show when=move || is_web>
+                            <div class="settings-row">
+                                <span class="settings-row-label">"This browser"</span>
+                                <span class="settings-row-value">"Remembers the choice on this device. It is not synced."</span>
+                            </div>
+                        </Show>
+                    </div>
+                </section>
+
                 <section class="settings-group">
                     <h2>"Workspace"</h2>
                     <div class="settings-rows">
@@ -32,7 +89,7 @@ pub fn SettingsView() -> impl IntoView {
                             <span class="settings-row-value">
                                 {move || live.snapshot.get()
                                     .map(|s| format!("{} stored", s.projects.len()))
-                                    .unwrap_or_default()}
+                                    .unwrap_or_else(|| "—".into())}
                             </span>
                         </div>
                         <div class="settings-row">
@@ -40,7 +97,7 @@ pub fn SettingsView() -> impl IntoView {
                             <span class="settings-row-value">
                                 {move || live.snapshot.get()
                                     .map(|s| format!("{} observed", s.sessions.len()))
-                                    .unwrap_or_default()}
+                                    .unwrap_or_else(|| "—".into())}
                             </span>
                         </div>
                     </div>

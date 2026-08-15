@@ -63,7 +63,7 @@ impl AppView {
             Self::Fleet => "Running agent sessions",
             Self::Integrations => "Connectors and capabilities",
             Self::Settings => "Local owner configuration",
-            Self::Costs => "Token spend by project",
+            Self::Costs => "Observed and unobserved spend",
         }
     }
 
@@ -90,6 +90,7 @@ pub fn App() -> impl IntoView {
     provide_context(WorkspaceModel::demo());
     provide_context(live);
     provide_context(active_view);
+    crate::theme::ThemeController::install();
     let action_live = live;
     provide_context(WorkspaceActionSink(Callback::new(move |action| {
         match &action {
@@ -180,19 +181,24 @@ pub fn App() -> impl IntoView {
                 return;
             }
             WorkspaceAction::OpenCreateTask(project_id) if action_live.is_desktop() => {
-                let project_exists = action_live
-                    .snapshot
-                    .get_untracked()
-                    .is_some_and(|snapshot| {
-                        snapshot
-                            .projects
-                            .iter()
-                            .any(|project| project.id == *project_id)
-                    });
-                if project_exists {
+                let snapshot = action_live.snapshot.get_untracked();
+                let in_workbench = snapshot.as_ref().is_some_and(|snapshot| {
+                    snapshot
+                        .projects
+                        .iter()
+                        .any(|project| project.id == *project_id)
+                });
+                let ignored = snapshot
+                    .as_ref()
+                    .is_some_and(|snapshot| snapshot.project_is_ignored(project_id));
+                if in_workbench {
                     action_live.task_create_error.set(None);
                     task_creator_project_id.set(Some(project_id.clone()));
                     task_creator_open.set(true);
+                } else if ignored {
+                    notice.set(Some(
+                        "Show this project in the workbench before creating a task.".into(),
+                    ));
                 } else {
                     notice.set(Some(
                         "Select a stored project before creating a task.".into(),
@@ -203,6 +209,13 @@ pub fn App() -> impl IntoView {
             WorkspaceAction::CreateProject { name, root_path } if action_live.is_desktop() => {
                 let close_creator = Callback::new(move |_| project_creator_open.set(false));
                 action_live.create_project(name.clone(), root_path.clone(), close_creator);
+                return;
+            }
+            WorkspaceAction::SetProjectIgnored {
+                project_id,
+                ignored,
+            } if action_live.is_desktop() => {
+                action_live.set_project_ignored(project_id.clone(), *ignored);
                 return;
             }
             WorkspaceAction::CreateTask {
@@ -246,8 +259,12 @@ pub fn App() -> impl IntoView {
             notice.set(Some(message));
         }
     });
-    let has_context_rail =
-        Signal::derive(move || !matches!(active_view.get(), AppView::Integrations | AppView::Settings));
+    let has_context_rail = Signal::derive(move || {
+        !matches!(
+            active_view.get(),
+            AppView::Integrations | AppView::Settings | AppView::Costs
+        )
+    });
     view! {
         <div class="app-frame">
             <header class="native-titlebar" data-tauri-drag-region="">
@@ -768,6 +785,7 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
     let live = expect_context::<LiveStatus>();
     let actions = expect_context::<WorkspaceActionSink>();
     let active_view = expect_context::<RwSignal<AppView>>();
+    let pending_ignore_id = RwSignal::new(None::<String>);
 
     view! {
         <div class="workspace-layout live-collection-layout live-projects-layout">
@@ -775,12 +793,16 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
                 <div class="toolbar-leading"><div><h1>"Projects"</h1><p>"Select a project to list its agent sessions"</p></div></div>
                 <div class="toolbar-actions">
                     <button class="secondary-button" type="button" on:click=move |_| inspector_open.set(true)>"Details"</button>
+                    <button class="secondary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::OpenCreateProject)><Icon path=ICON_PLUS />"Add project"</button>
                     <button
                         class="primary-button"
                         type="button"
-                        disabled=move || live.selected_project_id.get().is_none() || live.phase.get() == LoadPhase::Error
+                        disabled=move || {
+                            live.phase.get() == LoadPhase::Error
+                                || selected_workbench_project_id(&live).is_none()
+                        }
                         on:click=move |_| {
-                            if let Some(project_id) = live.selected_project_id.get_untracked() {
+                            if let Some(project_id) = selected_workbench_project_id(&live) {
                                 actions.dispatch(WorkspaceAction::OpenCreateTask(project_id));
                             }
                         }
@@ -789,7 +811,7 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
             </header>
             <div class="truth-banner live-truth-banner" role="note">
                 <Icon path=ICON_ATTENTION />
-                <span><strong>"Local work records"</strong>"Click a project to list its stored sessions. Session rows open the workspace conversation."</span>
+                <span><strong>"Local work records"</strong>"Discovery still collects every session it finds. Ignore hides a project from the workbench without deleting stored sessions."</span>
             </div>
             <div class="live-projects-content">
                 <Show when=move || live.phase.get() == LoadPhase::Loading>
@@ -798,11 +820,19 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
                 <Show when=move || live.phase.get() == LoadPhase::Error>
                     <div class="live-collection-empty"><span class="live-workspace-glyph is-problem"><Icon path=ICON_ATTENTION /></span><strong>"Local projects are unavailable"</strong><small>{move || live.error.get().unwrap_or_else(|| "The native workspace snapshot failed its safety checks.".into())}</small></div>
                 </Show>
-                <Show when=move || matches!(live.phase.get(), LoadPhase::Empty | LoadPhase::Ready) && live.snapshot.get().is_some_and(|snapshot| snapshot.projects.is_empty())>
+                <Show when=move || matches!(live.phase.get(), LoadPhase::Empty | LoadPhase::Ready) && live.snapshot.get().is_some_and(|snapshot| snapshot.projects.is_empty() && snapshot.ignored_projects.is_empty())>
                     <div class="live-collection-empty live-projects-empty">
                         <span class="live-workspace-glyph"><Icon path=ICON_FOLDER /></span>
                         <strong>"Start with a local project"</strong>
                         <small>"Add a folder boundary, then create tasks and assign any stored agents."</small>
+                        <button class="primary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::OpenCreateProject)><Icon path=ICON_PLUS />"Add project"</button>
+                    </div>
+                </Show>
+                <Show when=move || matches!(live.phase.get(), LoadPhase::Empty | LoadPhase::Ready) && live.snapshot.get().is_some_and(|snapshot| snapshot.projects.is_empty() && !snapshot.ignored_projects.is_empty())>
+                    <div class="live-collection-empty live-projects-empty">
+                        <span class="live-workspace-glyph"><Icon path=ICON_FOLDER /></span>
+                        <strong>"No projects in the workbench"</strong>
+                        <small>"Discovery still collects sessions. Ignored projects stay listed below."</small>
                         <button class="primary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::OpenCreateProject)><Icon path=ICON_PLUS />"Add project"</button>
                     </div>
                 </Show>
@@ -842,17 +872,33 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
                         let agents = snapshot.agents.clone();
                         let empty_task_id = StoredValue::new(project_id.clone());
                         let empty_sync_id = StoredValue::new(project_id.clone());
+                        let ignore_id = project_id.clone();
+                        let confirm_ignore_id = project_id.clone();
+                        let is_pending_ignore = pending_ignore_id.get().as_deref() == Some(project_id.as_str());
                         view! {
                             <section class=if is_selected { "live-project-group is-selected" } else { "live-project-group" }>
                                 <header class="live-project-group-header">
-                                    <button class="live-project-select" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SelectProject(select_id.clone()))>
+                                    <button class="live-project-select" type="button" on:click=move |_| { pending_ignore_id.set(None); actions.dispatch(WorkspaceAction::SelectProject(select_id.clone())); }>
                                         <span class="live-project-mark"><Icon path=ICON_FOLDER /></span>
                                         <span><strong>{project_name}</strong><small>{root_path}</small></span>
                                         <span class="live-project-summary"><span class="state-label quiet">{project_state}</span><small>{session_count}" sessions"</small></span>
                                     </button>
-                                    <button class="secondary-button compact-project-action" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::OpenCreateTask(task_id.clone()))><Icon path=ICON_PLUS />"Task"</button>
+                                    <div class="live-project-header-actions">
+                                        <button class="secondary-button compact-project-action" type="button" on:click=move |_| { actions.dispatch(WorkspaceAction::SelectProject(ignore_id.clone())); pending_ignore_id.set(Some(ignore_id.clone())); }>"Ignore"</button>
+                                        <button class="secondary-button compact-project-action" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::OpenCreateTask(task_id.clone()))><Icon path=ICON_PLUS />"Task"</button>
+                                    </div>
                                 </header>
-                                {if is_selected {
+                                {if is_selected && is_pending_ignore {
+                                    view! {
+                                        <div class="live-ignore-confirm">
+                                            <p>"Ignoring hides this project from Projects, Fleet, Costs, Attention, and Overview. Collected sessions stay in the local store. Discovery will keep collecting."</p>
+                                            <div class="live-ignore-confirm-actions">
+                                                <button class="secondary-button compact-project-action" type="button" on:click=move |_| pending_ignore_id.set(None)>"Cancel"</button>
+                                                <button class="secondary-button compact-project-action" type="button" on:click=move |_| { pending_ignore_id.set(None); actions.dispatch(WorkspaceAction::SetProjectIgnored { project_id: confirm_ignore_id.clone(), ignored: true }); }>"Ignore"</button>
+                                            </div>
+                                        </div>
+                                    }.into_any()
+                                } else if is_selected {
                                     view! {
                                         <div class="live-task-list">
                                             {sessions.into_iter().map(|session| {
@@ -903,8 +949,57 @@ fn LiveProjectsView(inspector_open: RwSignal<bool>) -> impl IntoView {
                         }
                     }).collect_view()})}
                 </div>
+                {move || live.snapshot.get().filter(|snapshot| !snapshot.ignored_projects.is_empty()).map(|snapshot| {
+                    let selected = live.selected_project_id.get();
+                    let ignored_count = snapshot.ignored_projects.len();
+                    view! {
+                        <section class="live-ignored-projects" aria-label="Ignored projects">
+                            <div class="section-label"><span>"Ignored"</span><span class="count">{ignored_count}</span></div>
+                            <p class="live-ignored-note">"Hidden from the workbench. Collected sessions stay stored. Discovery still runs."</p>
+                            {snapshot.ignored_projects.iter().map(|project| {
+                                let project_id = project.id.clone();
+                                let select_id = project_id.clone();
+                                let unignore_id = project_id.clone();
+                                let project_name = project.name.clone();
+                                let root_path = project.root_path.clone().unwrap_or_else(|| "No local root recorded".into());
+                                let is_selected = selected.as_deref() == Some(project_id.as_str());
+                                view! {
+                                    <section class=if is_selected { "live-project-group live-ignored-group is-selected" } else { "live-project-group live-ignored-group" }>
+                                        <header class="live-project-group-header">
+                                            <button class="live-project-select" type="button" on:click=move |_| { pending_ignore_id.set(None); actions.dispatch(WorkspaceAction::SelectProject(select_id.clone())); }>
+                                                <span class="live-project-mark"><Icon path=ICON_FOLDER /></span>
+                                                <span><strong>{project_name}</strong><small>{root_path}</small></span>
+                                                <span class="live-project-summary"><span class="state-label quiet">"Ignored"</span></span>
+                                            </button>
+                                            <button class="secondary-button compact-project-action" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SetProjectIgnored { project_id: unignore_id.clone(), ignored: false })>"Show"</button>
+                                        </header>
+                                        {if is_selected {
+                                            view! {
+                                                <div class="live-ignored-detail">
+                                                    <p>"This project is hidden from operating lists. Collected sessions stay in the local store."</p>
+                                                </div>
+                                            }.into_any()
+                                        } else {
+                                            view! { <></> }.into_any()
+                                        }}
+                                    </section>
+                                }
+                            }).collect_view()}
+                        </section>
+                    }
+                })}
             </div>
         </div>
+    }
+}
+
+fn selected_workbench_project_id(live: &LiveStatus) -> Option<String> {
+    let project_id = live.selected_project_id.get()?;
+    let snapshot = live.snapshot.get()?;
+    if snapshot.project_is_ignored(&project_id) {
+        None
+    } else {
+        Some(project_id)
     }
 }
 
@@ -933,7 +1028,10 @@ fn LiveFleetView(inspector_open: RwSignal<bool>) -> impl IntoView {
 
     // Flat pre-sorted item list — only recomputed when snapshot changes, not on scroll.
     let fleet_items = Signal::derive(move || {
-        live.snapshot.get().map(|s| build_fleet_items(&s)).unwrap_or_default()
+        live.snapshot
+            .get()
+            .map(|s| build_fleet_items(&s))
+            .unwrap_or_default()
     });
 
     // Tracks scroll position of the `.live-collection-content` div.
@@ -947,7 +1045,7 @@ fn LiveFleetView(inspector_open: RwSignal<bool>) -> impl IntoView {
             </header>
             <div class="truth-banner live-truth-banner" role="note">
                 <Icon path=ICON_ATTENTION />
-                <span><strong>"Observed agent sessions"</strong>"Every stored session is listed. Running sessions stay at the top; idle history remains visible."</span>
+                <span><strong>"Observed agent sessions"</strong>"Sessions from workbench projects are listed. Running sessions stay at the top; idle history remains visible."</span>
             </div>
             <div
                 class="live-collection-content"
@@ -1222,6 +1320,7 @@ fn LiveCollectionContext(kind: &'static str) -> impl IntoView {
 #[component]
 fn LiveCollectionInspector(kind: &'static str, inspector_open: RwSignal<bool>) -> impl IntoView {
     let live = expect_context::<LiveStatus>();
+    let actions = expect_context::<WorkspaceActionSink>();
     let (title, _, _, _) = live_collection_copy(kind);
     view! {
         <div class="inspector-content">
@@ -1230,7 +1329,9 @@ fn LiveCollectionInspector(kind: &'static str, inspector_open: RwSignal<bool>) -
                 {move || live.snapshot.get().and_then(|snapshot| {
                     if kind == "projects" {
                         let project_id = live.selected_project_id.get()?;
-                        let project = snapshot.projects.iter().find(|project| project.id == project_id)?.clone();
+                        let project = snapshot.find_project(&project_id)?.clone();
+                        let ignored = project.ignored || snapshot.project_is_ignored(&project_id);
+                        let membership_id = project_id.clone();
                         let mut sessions = snapshot
                             .sessions
                             .iter()
@@ -1247,12 +1348,28 @@ fn LiveCollectionInspector(kind: &'static str, inspector_open: RwSignal<bool>) -
                                     <div><dt>"Name"</dt><dd>{project.name.clone()}</dd></div>
                                     <div><dt>"Root"</dt><dd>{root}</dd></div>
                                     <div><dt>"State"</dt><dd>{project.state.clone()}</dd></div>
-                                    <div><dt>"Sessions"</dt><dd>{sessions.len()}</dd></div>
+                                    <div><dt>"Membership"</dt><dd>{if ignored { "Hidden from the workbench" } else { "In the workbench" }}</dd></div>
+                                    <div><dt>"Sessions"</dt><dd>{if ignored { "Still stored".to_string() } else { sessions.len().to_string() }}</dd></div>
                                 </dl>
                             </section>
                             <section class="inspector-section">
+                                <h3>"Owner membership"</h3>
+                                <p class="inspector-note">"Ignoring hides this project from operating lists. Collected sessions stay in the local store. Discovery still runs."</p>
+                                {if ignored {
+                                    view! {
+                                        <button class="secondary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SetProjectIgnored { project_id: membership_id.clone(), ignored: false })>"Show in workbench"</button>
+                                    }.into_any()
+                                } else {
+                                    view! {
+                                        <button class="secondary-button" type="button" on:click=move |_| actions.dispatch(WorkspaceAction::SetProjectIgnored { project_id: membership_id.clone(), ignored: true })>"Ignore project"</button>
+                                    }.into_any()
+                                }}
+                            </section>
+                            <section class="inspector-section">
                                 <h3>"Sessions"</h3>
-                                {if sessions.is_empty() {
+                                {if ignored {
+                                    view! { <p class="inspector-note">"Session rows stay off the workbench while this project is ignored."</p> }.into_any()
+                                } else if sessions.is_empty() {
                                     view! { <p class="inspector-note">"No session metadata is stored for this project yet."</p> }.into_any()
                                 } else {
                                     view! {
@@ -1825,7 +1942,11 @@ fn agent_system_tone(live: &LiveStatus) -> &'static str {
     let Some(snapshot) = live.snapshot.get() else {
         return live_phase_tone(live.phase.get());
     };
-    if snapshot.sessions.iter().any(|s| s.state == "waiting" || s.state == "problem") {
+    if snapshot
+        .sessions
+        .iter()
+        .any(|s| s.state == "waiting" || s.state == "problem")
+    {
         return "attention";
     }
     if snapshot.sessions.iter().any(|s| s.state == "running") {
@@ -1838,9 +1959,21 @@ fn titlebar_status_label(live: &LiveStatus) -> String {
     let Some(snapshot) = live.snapshot.get() else {
         return live.phase.get().label().into();
     };
-    let running = snapshot.sessions.iter().filter(|s| s.state == "running").count();
-    let waiting = snapshot.sessions.iter().filter(|s| s.state == "waiting").count();
-    let problem = snapshot.sessions.iter().filter(|s| s.state == "problem").count();
+    let running = snapshot
+        .sessions
+        .iter()
+        .filter(|s| s.state == "running")
+        .count();
+    let waiting = snapshot
+        .sessions
+        .iter()
+        .filter(|s| s.state == "waiting")
+        .count();
+    let problem = snapshot
+        .sessions
+        .iter()
+        .filter(|s| s.state == "problem")
+        .count();
     if problem > 0 {
         format!("{problem} sessions need attention")
     } else if waiting > 0 {

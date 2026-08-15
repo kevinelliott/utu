@@ -3,9 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#edf2ef" />
+    <meta name="theme-color" content="#e2e7ec" />
     <meta name="description" content="A local-first operations workspace for AI agents." />
     <title>Utu</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("utu.theme") || "system";
+          var dark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", dark ? "#171e26" : "#e2e7ec");
+        } catch (e) {}
+      })();
+    </script>
     <link data-trunk rel="css" href="styles.css" />
     <link data-trunk rel="copy-file" href="static/favicon.svg" />
     <link data-trunk rel="copy-file" href="src-tauri/icons/app-icon.svg" />
@@ -14,7 +28,7 @@
   <body>
     <!--
     THESIS: One installed workspace keeps agent work close and controllable; it refuses the browser-admin dashboard.
-    OWN-WORLD: Cool mist window chrome, one inset white work surface, ink typography, celadon selection, and compact outline controls.
+    OWN-WORLD: Cool slate window chrome, one inset warm-paper work surface, near-black ink, teal selection, and compact outline controls.
     STORY: Workspace is the only live direction surface and requires an explicit capable session; Attention, Projects, Fleet, and Integrations preserve truthful local context.
     FIRST VIEWPORT: A narrow utility rail and context rail frame a dominant work stream; selection opens a transient right inspector and a composer anchors the bottom.
     FORM: Unified native workspace, approved three-state set; category-standard exit from seed 096ac972.

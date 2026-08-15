@@ -61,6 +61,7 @@ fn populate_dependencies(store: &Store) {
             name: "Persistent project".into(),
             root_path: Some("/tmp/project".into()),
             state: ProjectState::Active,
+            ignored: false,
             created_at_unix_ms: 1,
         })
         .unwrap();
@@ -98,6 +99,7 @@ fn populate_second_scope(store: &Store) {
             name: "Other project".into(),
             root_path: Some("/tmp/other-project".into()),
             state: ProjectState::Active,
+            ignored: false,
             created_at_unix_ms: 20,
         })
         .unwrap();
@@ -495,6 +497,92 @@ fn unknown_cost_is_not_zero_and_makes_summary_partial() {
     };
     assert!(store.upsert_cost(&rejected).is_err());
     assert!(store.get_cost("cost-invalid-unknown").unwrap().is_none());
+}
+
+#[test]
+fn empty_cost_summary_is_unknown_not_zero_and_not_complete() {
+    let store = Store::open_in_memory().unwrap();
+    populate_dependencies(&store);
+    let summary = store.cost_summary("project", "USD").unwrap();
+    assert!(summary.is_empty());
+    assert!(!summary.is_complete());
+    assert_eq!(summary.known_micros, 0);
+    assert_eq!(summary.known_records, 0);
+    assert_eq!(summary.unknown_records, 0);
+    assert_eq!(summary.confidence, CostConfidence::Unknown);
+    assert_eq!(summary.amount().micros, None);
+    assert_eq!(summary.amount().display(), "Unknown");
+}
+
+#[test]
+fn estimated_cost_summary_is_not_complete_or_exact() {
+    let store = Store::open_in_memory().unwrap();
+    populate_dependencies(&store);
+    store
+        .upsert_cost(&CostRecord {
+            id: "cost-estimate".into(),
+            project_id: "project".into(),
+            task_id: Some("task".into()),
+            session_id: Some("session".into()),
+            agent_id: Some("agent-a".into()),
+            amount: CostAmount::usd_estimate(184_000),
+            occurred_at_unix_ms: 10,
+            ingested_at_unix_ms: 10,
+            evidence: EvidenceKind::Inferred,
+            source: "utu.demo".into(),
+            note: Some("Synthetic estimate".into()),
+        })
+        .unwrap();
+    let summary = store.cost_summary("project", "USD").unwrap();
+    assert!(!summary.is_empty());
+    assert!(!summary.is_complete());
+    assert_eq!(summary.confidence, CostConfidence::Estimated);
+    assert_eq!(summary.amount().display(), "~$0.18");
+}
+
+#[test]
+fn foreign_currency_is_not_summed_into_usd_summary() {
+    let store = Store::open_in_memory().unwrap();
+    populate_dependencies(&store);
+    let usd = CostRecord {
+        id: "cost-usd".into(),
+        project_id: "project".into(),
+        task_id: Some("task".into()),
+        session_id: Some("session".into()),
+        agent_id: Some("agent-a".into()),
+        amount: CostAmount::usd_exact(1_000_000),
+        occurred_at_unix_ms: 10,
+        ingested_at_unix_ms: 10,
+        evidence: EvidenceKind::Observed,
+        source: "billing-api".into(),
+        note: None,
+    };
+    store.upsert_cost(&usd).unwrap();
+    store
+        .upsert_cost(&CostRecord {
+            id: "cost-eur".into(),
+            amount: CostAmount::new("EUR", Some(2_000_000), CostConfidence::Exact).unwrap(),
+            occurred_at_unix_ms: 11,
+            ingested_at_unix_ms: 11,
+            ..usd
+        })
+        .unwrap();
+    let usd_summary = store.cost_summary("project", "USD").unwrap();
+    assert_eq!(usd_summary.known_micros, 1_000_000);
+    assert_eq!(usd_summary.known_records, 1);
+    assert_eq!(usd_summary.confidence, CostConfidence::Exact);
+    let eur_summary = store.cost_summary("project", "EUR").unwrap();
+    assert_eq!(eur_summary.known_micros, 2_000_000);
+    let projection = store
+        .read_workspace_projection(utu_store::WorkspaceScope::Global, "USD")
+        .unwrap();
+    assert_eq!(projection.costs[0].records.len(), 2);
+    assert!(
+        projection.costs[0]
+            .records
+            .iter()
+            .any(|record| record.amount.currency == "EUR")
+    );
 }
 
 #[test]
@@ -1023,5 +1111,100 @@ fn demo_seed_is_explicit_labeled_and_refuses_nonempty_workspace() {
             .unwrap_err()
             .to_string()
             .contains("no projects")
+    );
+}
+
+#[test]
+fn owner_can_add_ignore_and_unignore_a_project_without_dropping_sessions() {
+    let store = Store::open_in_memory().unwrap();
+    populate_dependencies(&store);
+
+    store
+        .upsert_project(&Project {
+            id: "added".into(),
+            name: "Added locally".into(),
+            root_path: Some("/tmp/added".into()),
+            state: ProjectState::Active,
+            ignored: false,
+            created_at_unix_ms: 30,
+        })
+        .unwrap();
+    let added = store.get_project("added").unwrap().unwrap();
+    assert_eq!(added.name, "Added locally");
+    assert!(!added.ignored);
+    assert_eq!(store.list_workbench_projects().unwrap().len(), 2);
+    assert!(store.list_ignored_projects().unwrap().is_empty());
+
+    let ignored = store.set_project_ignored("project", true).unwrap();
+    assert!(ignored.ignored);
+    assert_eq!(store.list_workbench_projects().unwrap().len(), 1);
+    assert_eq!(store.list_ignored_projects().unwrap()[0].id, "project");
+    assert!(store.get_session("session").unwrap().is_some());
+    assert_eq!(store.list_sessions(Some("project")).unwrap().len(), 1);
+
+    let projection = store
+        .read_workspace_projection(utu_store::WorkspaceScope::Global, "USD")
+        .unwrap();
+    assert_eq!(projection.projects.len(), 1);
+    assert_eq!(projection.projects[0].id, "added");
+    assert_eq!(projection.ignored_projects.len(), 1);
+    assert_eq!(projection.ignored_projects[0].id, "project");
+    assert!(
+        projection
+            .sessions
+            .iter()
+            .all(|session| session.project_id != "project")
+    );
+    assert!(
+        projection
+            .tasks
+            .iter()
+            .all(|task| task.project_id != "project")
+    );
+    assert!(
+        projection
+            .costs
+            .iter()
+            .all(|cost| cost.project_id != "project")
+    );
+
+    let scoped = store
+        .read_workspace_projection(utu_store::WorkspaceScope::Project("project".into()), "USD")
+        .unwrap();
+    assert_eq!(scoped.projects.len(), 1);
+    assert!(scoped.projects[0].ignored);
+    assert_eq!(scoped.sessions.len(), 1);
+    assert!(scoped.ignored_projects.is_empty());
+
+    store
+        .upsert_project(&Project {
+            id: "project".into(),
+            name: "Persistent project".into(),
+            root_path: Some("/tmp/project".into()),
+            state: ProjectState::Active,
+            ignored: false,
+            created_at_unix_ms: 1,
+        })
+        .unwrap();
+    assert!(store.get_project("project").unwrap().unwrap().ignored);
+
+    let restored = store.set_project_ignored("project", false).unwrap();
+    assert!(!restored.ignored);
+    assert_eq!(store.list_workbench_projects().unwrap().len(), 2);
+    assert!(store.list_ignored_projects().unwrap().is_empty());
+    let restored_projection = store
+        .read_workspace_projection(utu_store::WorkspaceScope::Global, "USD")
+        .unwrap();
+    assert!(
+        restored_projection
+            .projects
+            .iter()
+            .any(|project| project.id == "project")
+    );
+    assert!(
+        restored_projection
+            .sessions
+            .iter()
+            .any(|session| session.id == "session")
     );
 }

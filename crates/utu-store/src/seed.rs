@@ -108,6 +108,7 @@ impl Store {
             name: "Utu demonstration workspace".into(),
             root_path: Some("~/Projects/Utu-Demo".into()),
             state: ProjectState::Active,
+            ignored: false,
             created_at_unix_ms: observed_at - 60_000,
         })?;
         self.upsert_task(&Task {

@@ -912,6 +912,7 @@ mod tests {
                 name: "Project".into(),
                 root_path: Some(root.to_string_lossy().into_owned()),
                 state: ProjectState::Active,
+                ignored: false,
                 created_at_unix_ms: 1,
             })
             .unwrap();
@@ -1017,6 +1018,7 @@ mod tests {
             name: "Project".into(),
             root_path: Some(canonical.to_string_lossy().into_owned()),
             state: ProjectState::Active,
+            ignored: false,
             created_at_unix_ms: 1,
         };
         store.upsert_project(&project).unwrap();

@@ -420,6 +420,7 @@ fn ensure_projects_for_roots<'a>(
                 name,
                 root_path: Some(root.clone()),
                 state: ProjectState::Active,
+                ignored: false,
                 created_at_unix_ms: unix_ms(),
             })
             .map_err(|error| error.to_string())?;
@@ -834,6 +835,7 @@ mod tests {
                 name: "Project".into(),
                 root_path: Some(root.to_string_lossy().into_owned()),
                 state: ProjectState::Active,
+                ignored: false,
                 created_at_unix_ms: 1,
             })
             .unwrap();

@@ -18,8 +18,10 @@ use crate::{
 
 const CAPABILITY_COLUMNS: &str = "can_observe, can_auth_probe, can_direct, can_pause, \
     can_resume, can_stop, can_logs, can_costs, can_agent_messages";
+const PROJECT_COLUMNS: &str = "id, name, root_path, state, created_at_unix_ms, ignored";
 const COST_SUMMARY_PAGE_ROWS: i64 = 4_096;
 const COST_SUMMARY_LIMB_BASE: u128 = 4_294_967_296;
+const COST_PROJECTION_RECORD_LIMIT: u32 = 200;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StreamQuery {
@@ -76,6 +78,7 @@ pub enum WorkspaceScope {
 pub struct ProjectCostProjection {
     pub project_id: String,
     pub summary: CostSummary,
+    pub records: Vec<CostRecord>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -88,8 +91,11 @@ pub struct WorkspaceProjection {
     pub integrations: Vec<Integration>,
     /// Global inventory, independent of `scope`.
     pub agents: Vec<Agent>,
-    /// Global or exactly one requested project.
+    /// Global workbench projects, or exactly one requested project.
     pub projects: Vec<Project>,
+    /// Owner-hidden projects. Present on the global snapshot so the owner can
+    /// unignore; omitted from project-scoped projections.
+    pub ignored_projects: Vec<Project>,
     /// Operational records restricted to `scope`.
     pub tasks: Vec<Task>,
     pub sessions: Vec<Session>,
@@ -181,6 +187,12 @@ impl CostSummary {
         self.known_records > 0
             && self.unknown_records == 0
             && matches!(self.confidence, CostConfidence::Exact)
+    }
+
+    /// No rows at all — distinct from unknown records, which are evidence that
+    /// spend could not be observed.
+    pub const fn is_empty(&self) -> bool {
+        self.known_records == 0 && self.unknown_records == 0
     }
 }
 
@@ -400,29 +412,73 @@ impl Store {
         let created_at = to_i64(project.created_at_unix_ms, "created_at_unix_ms")?;
         let connection = self.connection()?;
         connection.execute(
-            "INSERT INTO projects (id, name, root_path, state, created_at_unix_ms) VALUES (?1, ?2, ?3, ?4, ?5) \
-             ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, state=excluded.state",
-            params![project.id, project.name, project.root_path, project.state.db_value(), created_at],
+            "INSERT INTO projects (id, name, root_path, state, created_at_unix_ms, ignored) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+             ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, \
+                 state=excluded.state",
+            params![
+                project.id,
+                project.name,
+                project.root_path,
+                project.state.db_value(),
+                created_at,
+                bool_i64(project.ignored),
+            ],
         )?;
         Ok(())
     }
 
+    pub fn set_project_ignored(&self, id: &str, ignored: bool) -> Result<Project> {
+        validate_id("project", id)?;
+        {
+            let connection = self.connection()?;
+            let changed = connection.execute(
+                "UPDATE projects SET ignored = ?2 WHERE id = ?1",
+                params![id, bool_i64(ignored)],
+            )?;
+            if changed == 0 {
+                return Err(StoreError::NotFound {
+                    entity: "project",
+                    id: id.to_owned(),
+                });
+            }
+        }
+        self.get_project(id)?.ok_or_else(|| StoreError::NotFound {
+            entity: "project",
+            id: id.to_owned(),
+        })
+    }
+
     pub fn get_project(&self, id: &str) -> Result<Option<Project>> {
         let connection = self.connection()?;
-        let mut statement = connection.prepare(
-            "SELECT id, name, root_path, state, created_at_unix_ms FROM projects WHERE id = ?1",
-        )?;
+        let mut statement = connection.prepare(&format!(
+            "SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1"
+        ))?;
         let mut rows = statement.query([id])?;
         rows.next()?.map(decode_project).transpose()
     }
 
     pub fn list_projects(&self) -> Result<Vec<Project>> {
+        self.query_projects(None)
+    }
+
+    pub fn list_workbench_projects(&self) -> Result<Vec<Project>> {
+        self.query_projects(Some(false))
+    }
+
+    pub fn list_ignored_projects(&self) -> Result<Vec<Project>> {
+        self.query_projects(Some(true))
+    }
+
+    fn query_projects(&self, ignored: Option<bool>) -> Result<Vec<Project>> {
         let connection = self.connection()?;
-        let mut statement = connection.prepare(
-            "SELECT id, name, root_path, state, created_at_unix_ms FROM projects \
-             ORDER BY CASE state WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, name COLLATE NOCASE, id",
-        )?;
-        collect_rows(statement.query([])?, decode_project)
+        let mut statement = connection.prepare(&format!(
+            "SELECT {PROJECT_COLUMNS} FROM projects \
+             WHERE (?1 IS NULL OR ignored = ?1) \
+             ORDER BY CASE state WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, \
+                      name COLLATE NOCASE, id"
+        ))?;
+        collect_rows(statement.query([ignored.map(bool_i64)])?, decode_project)
     }
 
     pub fn delete_project(&self, id: &str) -> Result<bool> {
@@ -1239,29 +1295,7 @@ impl Store {
 
     pub fn list_costs(&self, query: &CostQuery) -> Result<Vec<CostRecord>> {
         let connection = self.connection()?;
-        let currency = query
-            .currency
-            .as_ref()
-            .map(|value| value.to_ascii_uppercase());
-        let limit = i64::from(query.limit.unwrap_or(1_000).clamp(1, 50_000));
-        let mut statement = connection.prepare(
-            "SELECT id, project_id, task_id, session_id, agent_id, currency, amount_micros, confidence, \
-             occurred_at_unix_ms, ingested_at_unix_ms, evidence, source, note FROM cost_records \
-             WHERE (?1 IS NULL OR project_id = ?1) AND (?2 IS NULL OR task_id = ?2) \
-               AND (?3 IS NULL OR session_id = ?3) AND (?4 IS NULL OR agent_id = ?4) \
-               AND (?5 IS NULL OR currency = ?5) ORDER BY occurred_at_unix_ms DESC, id LIMIT ?6",
-        )?;
-        collect_rows(
-            statement.query(params![
-                query.project_id,
-                query.task_id,
-                query.session_id,
-                query.agent_id,
-                currency,
-                limit
-            ])?,
-            decode_cost,
-        )
+        list_costs_on(&connection, query)
     }
 
     pub fn cost_summary(&self, project_id: &str, currency: &str) -> Result<CostSummary> {
@@ -1617,23 +1651,38 @@ fn read_workspace_projection_on(
         WorkspaceScope::Project(project_id) => Some(project_id.as_str()),
     };
     let health = store_health_on(connection)?;
-    let projects = {
-        let mut statement = connection.prepare(
-            "SELECT id, name, root_path, state, created_at_unix_ms FROM projects \
+    let all_projects = {
+        let mut statement = connection.prepare(&format!(
+            "SELECT {PROJECT_COLUMNS} FROM projects \
              WHERE (?1 IS NULL OR id = ?1) \
              ORDER BY CASE state WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, \
-                      name COLLATE NOCASE, id",
-        )?;
+                      name COLLATE NOCASE, id"
+        ))?;
         collect_rows(statement.query([project_id])?, decode_project)?
     };
     if let WorkspaceScope::Project(requested) = &scope
-        && projects.is_empty()
+        && all_projects.is_empty()
     {
         return Err(StoreError::NotFound {
             entity: "project",
             id: requested.clone(),
         });
     }
+    let (projects, ignored_projects) = match &scope {
+        WorkspaceScope::Global => {
+            let workbench = all_projects
+                .iter()
+                .filter(|project| !project.ignored)
+                .cloned()
+                .collect::<Vec<_>>();
+            let ignored = all_projects
+                .into_iter()
+                .filter(|project| project.ignored)
+                .collect();
+            (workbench, ignored)
+        }
+        WorkspaceScope::Project(_) => (all_projects, Vec::new()),
+    };
     after_projects();
 
     let providers = {
@@ -1708,9 +1757,52 @@ fn read_workspace_projection_on(
             Ok(ProjectCostProjection {
                 project_id: project.id.clone(),
                 summary: cost_summary_on(connection, &project.id, currency)?,
+                records: list_costs_on(
+                    connection,
+                    &CostQuery {
+                        project_id: Some(project.id.clone()),
+                        limit: Some(COST_PROJECTION_RECORD_LIMIT),
+                        ..CostQuery::default()
+                    },
+                )?,
             })
         })
         .collect::<Result<Vec<_>>>()?;
+
+    let (tasks, sessions, attention, handoffs) = if matches!(scope, WorkspaceScope::Global) {
+        (
+            tasks
+                .into_iter()
+                .filter(|task| projects.iter().any(|project| project.id == task.project_id))
+                .collect(),
+            sessions
+                .into_iter()
+                .filter(|session| {
+                    projects
+                        .iter()
+                        .any(|project| project.id == session.project_id)
+                })
+                .collect(),
+            attention
+                .into_iter()
+                .filter(|item| {
+                    item.project_id
+                        .as_ref()
+                        .is_none_or(|id| projects.iter().any(|project| &project.id == id))
+                })
+                .collect(),
+            handoffs
+                .into_iter()
+                .filter(|handoff| {
+                    projects
+                        .iter()
+                        .any(|project| project.id == handoff.project_id)
+                })
+                .collect(),
+        )
+    } else {
+        (tasks, sessions, attention, handoffs)
+    };
 
     Ok(WorkspaceProjection {
         scope,
@@ -1719,6 +1811,7 @@ fn read_workspace_projection_on(
         integrations,
         agents,
         projects,
+        ignored_projects,
         tasks,
         sessions,
         attention,
@@ -1849,6 +1942,32 @@ fn store_health_on(connection: &Connection) -> Result<crate::StoreHealth> {
     })
 }
 
+fn list_costs_on(connection: &Connection, query: &CostQuery) -> Result<Vec<CostRecord>> {
+    let currency = query
+        .currency
+        .as_ref()
+        .map(|value| value.to_ascii_uppercase());
+    let limit = i64::from(query.limit.unwrap_or(1_000).clamp(1, 50_000));
+    let mut statement = connection.prepare(
+        "SELECT id, project_id, task_id, session_id, agent_id, currency, amount_micros, confidence, \
+         occurred_at_unix_ms, ingested_at_unix_ms, evidence, source, note FROM cost_records \
+         WHERE (?1 IS NULL OR project_id = ?1) AND (?2 IS NULL OR task_id = ?2) \
+           AND (?3 IS NULL OR session_id = ?3) AND (?4 IS NULL OR agent_id = ?4) \
+           AND (?5 IS NULL OR currency = ?5) ORDER BY occurred_at_unix_ms DESC, id LIMIT ?6",
+    )?;
+    collect_rows(
+        statement.query(params![
+            query.project_id,
+            query.task_id,
+            query.session_id,
+            query.agent_id,
+            currency,
+            limit
+        ])?,
+        decode_cost,
+    )
+}
+
 fn cost_summary_on(
     connection: &Connection,
     project_id: &str,
@@ -1971,6 +2090,7 @@ fn decode_project(row: &Row<'_>) -> Result<Project> {
         root_path: row.get(2)?,
         state: ProjectState::from_db(&row.get::<_, String>(3)?)?,
         created_at_unix_ms: to_u64(row.get(4)?, "created_at_unix_ms")?,
+        ignored: read_bool(row, 5)?,
     })
 }
 
@@ -2916,6 +3036,7 @@ mod tests {
                 name: "Cost aggregation".into(),
                 root_path: None,
                 state: ProjectState::Active,
+                ignored: false,
                 created_at_unix_ms: 1,
             })
             .expect("project");
@@ -3090,6 +3211,7 @@ mod tests {
                 name: "Before".into(),
                 root_path: None,
                 state: ProjectState::Active,
+                ignored: false,
                 created_at_unix_ms: 1,
             })
             .expect("initial project");
@@ -3103,6 +3225,7 @@ mod tests {
                     name: "During".into(),
                     root_path: None,
                     state: ProjectState::Active,
+                    ignored: false,
                     created_at_unix_ms: 2,
                 })
                 .expect("concurrent project");

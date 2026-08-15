@@ -14,7 +14,9 @@ use utu_connectors::{DiagnosticReport, diagnose_known_connectors};
 use utu_store::Store;
 
 use crate::{
-    agent_sessions::{SessionRoots, watched_claude_paths, watched_codex_paths, watched_cursor_paths},
+    agent_sessions::{
+        SessionRoots, watched_claude_paths, watched_codex_paths, watched_cursor_paths,
+    },
     clock::unix_ms,
     codex_commands::canonical_stored_project_root,
     codex_runtime::CodexRuntime,

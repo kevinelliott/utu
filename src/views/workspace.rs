@@ -2,14 +2,14 @@ use leptos::prelude::*;
 
 use crate::{
     components::{
-        AgentCliIcon, EvidenceTag, ICON_BRANCH, ICON_CHECK, ICON_CHEVRON_RIGHT,
-        ICON_CLOSE, ICON_FILE, ICON_FOLDER, ICON_LOCK, ICON_MORE, ICON_PLUS, ICON_SEND,
-        ICON_SHIELD, ICON_STOP, ICON_TERMINAL, Icon, StatusDot, VirtualList,
+        AgentCliIcon, EvidenceTag, ICON_BRANCH, ICON_CHECK, ICON_CHEVRON_RIGHT, ICON_CLOSE,
+        ICON_FILE, ICON_FOLDER, ICON_LOCK, ICON_MORE, ICON_PLUS, ICON_SEND, ICON_SHIELD, ICON_STOP,
+        ICON_TERMINAL, Icon, StatusDot, VirtualList,
     },
     markdown::render_markdown,
     workspace_data::{
-        relative_unix_ms, session_detail, session_state_tone, session_title, LiveStatus, LoadPhase,
-        WorkspaceAction, WorkspaceActionSink, WorkspaceModel,
+        LiveStatus, LoadPhase, WorkspaceAction, WorkspaceActionSink, WorkspaceModel,
+        relative_unix_ms, session_detail, session_state_tone, session_title,
     },
 };
 
@@ -195,8 +195,12 @@ fn WorkspaceSessionsPane() -> impl IntoView {
     }
 
     let sorted_sessions = Signal::derive(move || {
-        let Some(snapshot) = live.snapshot.get() else { return vec![] };
-        let Some(project_id) = live.selected_project_id.get() else { return vec![] };
+        let Some(snapshot) = live.snapshot.get() else {
+            return vec![];
+        };
+        let Some(project_id) = live.selected_project_id.get() else {
+            return vec![];
+        };
         let mut rows: Vec<Row> = snapshot
             .sessions
             .iter()
@@ -230,9 +234,7 @@ fn WorkspaceSessionsPane() -> impl IntoView {
                         live.snapshot.get()
                             .and_then(|snapshot| {
                                 live.selected_project_id.get().and_then(|project_id| {
-                                    snapshot.projects.iter()
-                                        .find(|p| p.id == project_id)
-                                        .map(|p| p.name.clone())
+                                    snapshot.find_project(&project_id).map(|p| p.name.clone())
                                 })
                             })
                             .unwrap_or_else(|| "Sessions".into())

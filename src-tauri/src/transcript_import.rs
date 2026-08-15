@@ -27,7 +27,9 @@ use utu_core::{EvidenceKind, MessageRole, Session};
 use utu_store::{NewMessage, Store};
 
 use crate::{
-    agent_sessions::{SessionRoots, claude_project_dir, cursor_project_dir, parse_rfc3339_utc_millis},
+    agent_sessions::{
+        SessionRoots, claude_project_dir, cursor_project_dir, parse_rfc3339_utc_millis,
+    },
     clock::unix_ms,
     codex_commands::CODEX_AGENT_ID,
     ids::deterministic_id,
@@ -74,8 +76,8 @@ fn import_claude_transcript(
         Some(root) => root,
         None => return 0,
     };
-    let path = claude_project_dir(roots, &project_root)
-        .join(format!("{provider_session_id}.jsonl"));
+    let path =
+        claude_project_dir(roots, &project_root).join(format!("{provider_session_id}.jsonl"));
     if !path.is_file() {
         return 0;
     }
@@ -105,10 +107,7 @@ fn persist_claude_messages(store: &Store, session: &Session, path: &Path) -> u32
         };
         let (role, author_agent_id) = match entry.kind.as_str() {
             "human" | "user" => (MessageRole::Owner, None),
-            "assistant" => (
-                MessageRole::Agent,
-                Some(session.agent_id.clone()),
-            ),
+            "assistant" => (MessageRole::Agent, Some(session.agent_id.clone())),
             _ => continue,
         };
         let Some(msg) = entry.message else {
@@ -124,12 +123,14 @@ fn persist_claude_messages(store: &Store, session: &Session, path: &Path) -> u32
             .timestamp
             .as_deref()
             .and_then(parse_rfc3339_utc_millis)
-            .or_else(|| entry.timestamp.as_deref().and_then(parse_rfc3339_utc_millis))
+            .or_else(|| {
+                entry
+                    .timestamp
+                    .as_deref()
+                    .and_then(parse_rfc3339_utc_millis)
+            })
             .unwrap_or(now);
-        let id = deterministic_id(
-            "transcript-msg",
-            &format!("{}:{}", session.id, imported),
-        );
+        let id = deterministic_id("transcript-msg", &format!("{}:{}", session.id, imported));
         let new = NewMessage {
             id,
             session_id: session.id.clone(),
@@ -220,10 +221,7 @@ fn find_codex_rollout_file(codex_sessions: &Path, session_id: &str) -> Option<Pa
 
 fn find_codex_rollout_recursive(dir: &Path, session_id: &str) -> Option<PathBuf> {
     let entries = std::fs::read_dir(dir).ok()?;
-    let mut children: Vec<PathBuf> = entries
-        .flatten()
-        .map(|e| e.path())
-        .collect();
+    let mut children: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
     // Descend newest directories first (sorted descending) so recent sessions
     // are found quickly without scanning old dated directories.
     children.sort_unstable_by(|a, b| b.cmp(a));
@@ -280,10 +278,7 @@ fn persist_codex_messages(store: &Store, session: &Session, path: &Path) -> u32 
         }
         let (role, author_agent_id) = match payload.role.as_deref() {
             Some("user") => (MessageRole::Owner, None),
-            Some("assistant") => (
-                MessageRole::Agent,
-                Some(session.agent_id.clone()),
-            ),
+            Some("assistant") => (MessageRole::Agent, Some(session.agent_id.clone())),
             // Skip system/developer context messages.
             _ => continue,
         };
@@ -298,10 +293,7 @@ fn persist_codex_messages(store: &Store, session: &Session, path: &Path) -> u32 
             .as_deref()
             .and_then(parse_rfc3339_utc_millis)
             .unwrap_or(now);
-        let id = deterministic_id(
-            "transcript-msg",
-            &format!("{}:{}", session.id, imported),
-        );
+        let id = deterministic_id("transcript-msg", &format!("{}:{}", session.id, imported));
         let new = NewMessage {
             id,
             session_id: session.id.clone(),
@@ -413,10 +405,7 @@ fn persist_cursor_messages(store: &Store, session: &Session, path: &Path) -> u32
             continue;
         }
         let body = truncate_body(body);
-        let id = deterministic_id(
-            "transcript-msg",
-            &format!("{}:{}", session.id, imported),
-        );
+        let id = deterministic_id("transcript-msg", &format!("{}:{}", session.id, imported));
         let new = NewMessage {
             id,
             session_id: session.id.clone(),
@@ -520,7 +509,9 @@ mod tests {
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
     };
-    use utu_core::{AgentState, ConnectorCapabilities, Project, ProjectState, Provider, ProviderKind};
+    use utu_core::{
+        AgentState, ConnectorCapabilities, Project, ProjectState, Provider, ProviderKind,
+    };
     use utu_store::Store;
 
     struct Fixture(PathBuf);
@@ -531,8 +522,8 @@ mod tests {
                 .duration_since(UNIX_EPOCH)
                 .expect("clock")
                 .as_nanos();
-            let path = std::env::temp_dir()
-                .join(format!("utu-transcript-{}-{nonce}", std::process::id()));
+            let path =
+                std::env::temp_dir().join(format!("utu-transcript-{}-{nonce}", std::process::id()));
             fs::create_dir_all(&path).expect("fixture dir");
             Self(path)
         }
@@ -563,7 +554,7 @@ mod tests {
                 kind: ProviderKind::LocalCli,
             })
             .unwrap();
-        use utu_core::{Agent, AuthState, IntegrationState, EvidenceKind};
+        use utu_core::{Agent, AuthState, EvidenceKind, IntegrationState};
         store
             .upsert_integration(&utu_core::Integration {
                 id: "test-connector".into(),
@@ -595,6 +586,7 @@ mod tests {
                 name: "Project".into(),
                 root_path: Some(root.to_string_lossy().into_owned()),
                 state: ProjectState::Active,
+                ignored: false,
                 created_at_unix_ms: 1,
             })
             .unwrap();
@@ -651,7 +643,10 @@ mod tests {
         let imported = import_transcript(&store, &session, &roots);
         assert_eq!(imported, 2);
 
-        let query = utu_store::StreamQuery { after_sequence: None, limit: 10 };
+        let query = utu_store::StreamQuery {
+            after_sequence: None,
+            limit: 10,
+        };
         let projection = store
             .read_session_projection("session", query, query, 10)
             .unwrap()
@@ -685,7 +680,10 @@ mod tests {
 
         let imported = import_transcript(&store, &session, &roots);
         assert_eq!(imported, 1);
-        let query = utu_store::StreamQuery { after_sequence: None, limit: 5 };
+        let query = utu_store::StreamQuery {
+            after_sequence: None,
+            limit: 5,
+        };
         let projection = store
             .read_session_projection("session", query, query, 5)
             .unwrap()
@@ -731,7 +729,10 @@ mod tests {
         let imported = import_transcript(&store, &session, &roots);
         assert_eq!(imported, 2);
 
-        let query = utu_store::StreamQuery { after_sequence: None, limit: 10 };
+        let query = utu_store::StreamQuery {
+            after_sequence: None,
+            limit: 10,
+        };
         let projection = store
             .read_session_projection("session", query, query, 10)
             .unwrap()
@@ -783,9 +784,10 @@ mod tests {
         let roots = fixture.roots();
         let session = make_session(CURSOR_AGENT_ID);
 
-        let transcript_dir = crate::agent_sessions::cursor_project_dir(&roots, &root.to_string_lossy())
-            .join("agent-transcripts")
-            .join("test-session-id");
+        let transcript_dir =
+            crate::agent_sessions::cursor_project_dir(&roots, &root.to_string_lossy())
+                .join("agent-transcripts")
+                .join("test-session-id");
         fs::create_dir_all(&transcript_dir).unwrap();
         fs::write(
             transcript_dir.join("test-session-id.jsonl"),
@@ -800,7 +802,10 @@ mod tests {
         let imported = import_transcript(&store, &session, &roots);
         assert_eq!(imported, 3);
 
-        let query = utu_store::StreamQuery { after_sequence: None, limit: 10 };
+        let query = utu_store::StreamQuery {
+            after_sequence: None,
+            limit: 10,
+        };
         let projection = store
             .read_session_projection("session", query, query, 10)
             .unwrap()

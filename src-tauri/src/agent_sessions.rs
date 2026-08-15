@@ -88,9 +88,7 @@ pub fn claude_project_dir(roots: &SessionRoots, canonical_root: &str) -> PathBuf
 /// `-Users-kevin-Projects-foo`.
 pub fn cursor_project_dirname(canonical_root: &str) -> String {
     let full = claude_project_dirname(canonical_root);
-    full.strip_prefix('-')
-        .map(str::to_owned)
-        .unwrap_or(full)
+    full.strip_prefix('-').map(str::to_owned).unwrap_or(full)
 }
 
 pub fn cursor_project_dir(roots: &SessionRoots, canonical_root: &str) -> PathBuf {
@@ -586,9 +584,7 @@ fn cursor_state_from_mtime_and_paths(
     active_paths: &[String],
 ) -> AgentState {
     let is_active = active_paths.iter().any(|path| {
-        path == cwd
-            || cwd.starts_with(&format!("{path}/"))
-            || path.starts_with(&format!("{cwd}/"))
+        path == cwd || cwd.starts_with(&format!("{path}/")) || path.starts_with(&format!("{cwd}/"))
     });
     if is_active {
         return AgentState::Running;

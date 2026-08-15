@@ -163,6 +163,17 @@ pub enum CostConfidence {
     Unknown,
 }
 
+impl CostConfidence {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Exact => "Exact",
+            Self::Estimated => "Estimated",
+            Self::Partial => "Partial",
+            Self::Unknown => "Unknown",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CostAmount {
     pub currency: String,
@@ -323,6 +334,10 @@ pub struct Project {
     pub name: String,
     pub root_path: Option<String>,
     pub state: ProjectState,
+    /// Owner workbench membership. Ignored projects stay stored and keep
+    /// collecting sessions; default operating lists omit them.
+    #[serde(default)]
+    pub ignored: bool,
     pub created_at_unix_ms: u64,
 }
 

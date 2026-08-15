@@ -2,7 +2,7 @@ use rusqlite::{Connection, TransactionBehavior};
 
 use crate::{Result, StoreError};
 
-pub(crate) const LATEST_SCHEMA_VERSION: u32 = 4;
+pub(crate) const LATEST_SCHEMA_VERSION: u32 = 5;
 
 const MIGRATIONS: &[(&str, &str)] = &[
     (
@@ -280,6 +280,13 @@ const MIGRATIONS: &[(&str, &str)] = &[
         ALTER TABLE sessions ADD COLUMN title_hint TEXT;
         "#,
     ),
+    (
+        "project_owner_membership",
+        r#"
+        ALTER TABLE projects ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0 CHECK (ignored IN (0, 1));
+        CREATE INDEX projects_ignored_state_name ON projects (ignored, state, name COLLATE NOCASE);
+        "#,
+    ),
 ];
 
 pub(crate) fn migrate(connection: &mut Connection) -> Result<()> {
@@ -356,6 +363,14 @@ mod tests {
             .unwrap();
         assert_eq!(version, LATEST_SCHEMA_VERSION);
         assert_eq!(indexes, 1);
+        let ignored_column: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM pragma_table_info('projects') WHERE name = 'ignored'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(ignored_column, 1);
         let triggers: i64 = connection
             .query_row(
                 "SELECT count(*) FROM sqlite_schema WHERE type = 'trigger' \

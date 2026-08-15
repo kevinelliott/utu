@@ -137,6 +137,10 @@ pub enum WorkspaceAction {
         name: String,
         root_path: String,
     },
+    SetProjectIgnored {
+        project_id: String,
+        ignored: bool,
+    },
     CreateTask {
         project_id: String,
         title: String,
@@ -334,6 +338,27 @@ impl LiveStatus {
         });
     }
 
+    pub fn set_project_ignored(&self, project_id: String, ignored: bool) {
+        if !self.is_desktop() {
+            return;
+        }
+        let status = *self;
+        spawn_local(async move {
+            match ipc::set_project_ignored(&project_id, ignored).await {
+                Ok(project) => {
+                    status.selected_project_id.set(Some(project.id.clone()));
+                    match ipc::workspace_snapshot(None).await {
+                        Ok(snapshot) => status.accept_snapshot(snapshot),
+                        Err(error) => status.error.set(Some(format!(
+                            "Membership was updated, but Utu could not refresh the workspace: {error}"
+                        ))),
+                    }
+                }
+                Err(error) => status.error.set(Some(error)),
+            }
+        });
+    }
+
     pub fn create_task(
         &self,
         project_id: String,
@@ -383,7 +408,7 @@ impl LiveStatus {
         let selected_project = self
             .selected_project_id
             .get_untracked()
-            .filter(|id| snapshot.projects.iter().any(|project| &project.id == id))
+            .filter(|id| snapshot.find_project(id).is_some())
             .or_else(|| snapshot.projects.first().map(|project| project.id.clone()));
         let selected_session = self
             .selected_session_id
@@ -627,10 +652,9 @@ impl LiveStatus {
     pub fn active_project_name(&self) -> Option<String> {
         let snapshot = self.snapshot.get()?;
         let selected = self.selected_project_id.get();
-        snapshot
-            .projects
-            .iter()
-            .find(|project| Some(project.id.as_str()) == selected.as_deref())
+        selected
+            .as_deref()
+            .and_then(|id| snapshot.find_project(id))
             .map(|project| project.name.clone())
     }
 
@@ -723,7 +747,11 @@ pub fn session_title(snapshot: &WorkspaceSnapshot, session: &SessionRecord) -> S
         return hint.to_owned();
     }
     // 3. Short provider session identifier — never includes the agent CLI name.
-    if let Some(provider_id) = session.provider_session_id.as_deref().filter(|s| !s.is_empty()) {
+    if let Some(provider_id) = session
+        .provider_session_id
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
         return format!("Session {}", short_provider_id(provider_id));
     }
     "Untitled session".to_owned()
@@ -812,6 +840,13 @@ pub fn demo_action_notice(action: &WorkspaceAction, read_only: bool) -> String {
         }
         WorkspaceAction::OpenCreateProject | WorkspaceAction::CreateProject { .. } => {
             "Project creation is available only in the native owner app.".into()
+        }
+        WorkspaceAction::SetProjectIgnored { ignored, .. } => {
+            if *ignored {
+                "Ignoring a project is available only in the native owner app.".into()
+            } else {
+                "Showing an ignored project is available only in the native owner app.".into()
+            }
         }
         WorkspaceAction::OpenCreateTask(_) | WorkspaceAction::CreateTask { .. } => {
             "Task creation is available only in the native owner app.".into()

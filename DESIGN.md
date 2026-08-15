@@ -2,56 +2,108 @@
 name: Utu
 description: A calm, compact, provider-neutral workbench for operating AI work.
 colors:
-  chrome-top: "#edf2ef"
-  chrome-bottom: "#e7edeb"
-  surface: "#fcfdfc"
-  surface-soft: "#f4f7f6"
+  chrome-top: "#e2e7ec"
+  chrome-bottom: "#d5dce4"
+  surface: "#fffefb"
+  surface-soft: "#f0ece3"
   surface-raised: "#ffffff"
-  ink: "#18221f"
-  ink-soft: "#394640"
-  muted: "#65716c"
-  quiet: "#5f6b66"
-  line: "#dce3e0"
-  line-strong: "#cbd5d1"
-  green: "#1f7a5a"
-  green-strong: "#126348"
-  green-soft: "#e7f2ed"
-  amber: "#875515"
-  amber-soft: "#f7edda"
-  coral: "#c34e42"
-  coral-soft: "#fae9e6"
-  blue-soft: "#e8f0f6"
-  selection: "#e5f1ec"
-  focus: "#167657"
-  native-control: "#f7f9f8"
+  ink: "#12171c"
+  ink-soft: "#2a3238"
+  muted: "#3f4a52"
+  quiet: "#546068"
+  line: "#85919e"
+  line-strong: "#6d7885"
+  green: "#0b7a58"
+  green-strong: "#045c42"
+  green-hover: "#045c42"
+  green-soft: "#c8eedc"
+  amber: "#9a3f08"
+  amber-soft: "#fde6bf"
+  coral: "#a82820"
+  coral-soft: "#fddcd7"
+  blue-soft: "#d4eaf8"
+  selection: "#c6ead8"
+  focus: "#08704f"
+  native-control: "#f3efe6"
   native-control-hover: "#ffffff"
-  native-control-pressed: "#e9efec"
-  segmented-field: "#e8eeeb"
-  rail-field: "#edf2f0"
-  context-field: "#f5f8f7"
-  toolbar-field: "#fbfcfb"
-  evidence-inferred: "#315e7d"
-  evidence-stale: "#7a510f"
-  attention-count: "#86560e"
-  read-only-text: "#46514d"
-  toast-ink: "#1e2a26"
-  blue: "#376c91"
-  violet: "#68548f"
-  agent-ink: "#25312d"
-  avatar-coral: "#f0b4a8"
-  avatar-blue: "#b8d3e6"
-  avatar-lime: "#d7df9a"
-  avatar-violet: "#cec1e4"
-  avatar-rose: "#e9bdc9"
-  avatar-amber: "#edcc94"
-  avatar-teal: "#abd8cc"
-  avatar-aqua: "#aad9dc"
-  avatar-sand: "#ded2b3"
-  avatar-navy: "#b8c4dd"
-  avatar-ink: "#cad1ce"
-  avatar-purple: "#d2b8dc"
+  native-control-pressed: "#e4dfd4"
+  segmented-field: "#d5dde5"
+  rail-field: "#dce3ea"
+  context-field: "#e8edf2"
+  inspector-field: "#f6f3ec"
+  toolbar-field: "#fbf9f3"
+  log-field: "#ece8de"
+  evidence-inferred: "#155a86"
+  evidence-stale: "#8a4508"
+  attention-count: "#9a4d0a"
+  read-only-text: "#3a444c"
+  toast-ink: "#161c22"
+  on-primary: "#ffffff"
+  on-ink: "#ffffff"
+  on-toast: "#ffffff"
+  mix-lift: "#ffffff"
+  blue: "#1a5f96"
+  violet: "#6d3d9c"
+  violet-soft: "#ece3f6"
+  agent-ink: "#1a2228"
+  avatar-coral: "#ee8a76"
+  avatar-blue: "#6eb0e4"
+  avatar-lime: "#c2d24a"
+  avatar-violet: "#b394de"
+  avatar-rose: "#e47d9e"
+  avatar-amber: "#edb044"
+  avatar-teal: "#4fbfab"
+  avatar-aqua: "#4fc4d0"
+  avatar-sand: "#d0b06e"
+  avatar-navy: "#6e8ac6"
+  avatar-ink: "#7e8b89"
+  avatar-purple: "#c07ad4"
   mark-deep: "#183a31"
   mark-light: "#eff6f2"
+colors-dark:
+  chrome-top: "#171e26"
+  chrome-bottom: "#0e1318"
+  surface: "#2a261f"
+  surface-soft: "#353028"
+  surface-raised: "#322e27"
+  ink: "#f0ece4"
+  ink-soft: "#d8d2c8"
+  muted: "#b8b2a6"
+  quiet: "#a8a296"
+  line: "#7a8490"
+  line-strong: "#96a0ac"
+  green: "#0b7a58"
+  green-strong: "#7dceb0"
+  green-hover: "#086348"
+  green-soft: "#1a3a30"
+  amber: "#e0a15c"
+  amber-soft: "#3a2a14"
+  coral: "#e88880"
+  coral-soft: "#3c201e"
+  blue: "#7eb4d8"
+  blue-soft: "#1a3040"
+  violet: "#c4a0d8"
+  violet-soft: "#2e2438"
+  selection: "#1f4034"
+  focus: "#3dba8a"
+  native-control: "#332f28"
+  native-control-hover: "#3c372f"
+  native-control-pressed: "#241f1a"
+  rail-field: "#121920"
+  context-field: "#1b222b"
+  inspector-field: "#312c24"
+  toolbar-field: "#241f1a"
+  log-field: "#3a342b"
+  segmented-field: "#252c36"
+  evidence-inferred: "#7eb4d8"
+  evidence-stale: "#d4a05c"
+  attention-count: "#e0a15c"
+  read-only-text: "#c8c2b8"
+  toast-ink: "#0e1218"
+  on-primary: "#ffffff"
+  on-ink: "#2a261f"
+  on-toast: "#eeeae2"
+  mix-lift: "#3d3a34"
 typography:
   headline:
     fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI Variable, Segoe UI, sans-serif"
@@ -129,14 +181,14 @@ rounded:
 components:
   button-primary:
     backgroundColor: "{colors.green}"
-    textColor: "{colors.surface-raised}"
+    textColor: "{colors.on-primary}"
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "0 12px"
     height: "32px"
   button-primary-hover:
-    backgroundColor: "{colors.green-strong}"
-    textColor: "{colors.surface-raised}"
+    backgroundColor: "{colors.green-hover}"
+    textColor: "{colors.on-primary}"
   button-secondary:
     backgroundColor: "{colors.native-control}"
     textColor: "{colors.ink-soft}"
@@ -151,7 +203,7 @@ components:
     width: "38px"
     height: "38px"
   rail-button-active:
-    backgroundColor: "color-mix(in srgb, #e5f1ec 88%, white)"
+    backgroundColor: "color-mix(in srgb, {colors.selection} 82%, {colors.mix-lift})"
     textColor: "{colors.green-strong}"
     rounded: "{rounded.sm}"
     width: "38px"
@@ -186,7 +238,7 @@ components:
 
 **Creative North Star: "The Owner's Workbench"**
 
-The Owner's Workbench is a focused native workspace: light, calm, compact, direct, and operationally truthful. It feels app-native without borrowing a provider's identity, and it lets the owner move quickly among attention, projects, agents, sessions, and evidence without turning the work into a management report.
+The Owner's Workbench is a focused native workspace: calm in both light and dark, compact, direct, and operationally truthful. It feels app-native without borrowing a provider's identity, and it lets the owner move quickly among attention, projects, agents, sessions, and evidence without turning the work into a management report.
 
 The system is restrained, precise, and locally tactile. One edge-to-edge work surface holds the task at hand; a stable utility rail and contextual rail establish place, while inspectors and toasts appear only when the owner needs more depth. The titlebar, rails, toolbar, and content read as one continuous desktop window rather than a web page mounted inside a decorative frame. Hierarchy, evidence language, and small responsive state changes create character without a control-room skin or decorative noise.
 
@@ -194,19 +246,20 @@ The system is restrained, precise, and locally tactile. One edge-to-edge work su
 
 - Compact native-workspace density with a clear 9–19px type hierarchy.
 - Provider-neutral identity anchored by the canonical geometric app mark.
-- Pale mineral surfaces, deep spruce ink, and scarce semantic color.
+- Cool slate chrome against a warm-paper work surface (or their dark counterparts), near-black or warm-ivory ink, and scarce semantic color.
 - Edge-to-edge structural panes with transient contextual depth.
 - Evidence-aware states that pair color with text or shape.
 - Restrained motion, visible keyboard focus, and reduced-motion parity.
 
 ## Colors
 
-The palette is a pale mineral field with spruce-green authority, warm evidence colors, and quiet blue only for inference.
+The palette splits cool slate chrome from a warm-paper work surface so panes read as distinct rooms. Teal is the scarce authority color. Amber, coral, cobalt, and plum stay saturated enough to tell apart at a glance. Light and dark share the same token names; dark is a redesigned surface set, not an inversion of light.
 
 ### Primary
 
 - **Owner Green** (`green`): Primary actions and evidence-backed healthy or live state.
-- **Deep Owner Green** (`green-strong`): Hover emphasis, active labels, and high-contrast semantic copy.
+- **Deep Owner Green** (`green-strong`): Active labels and high-contrast semantic copy on soft fields.
+- **Owner Green Hover** (`green-hover`): Primary button hover fill. Same as green-strong in light; stays a deep teal in dark so white labels remain readable.
 - **Pale Owner Green** (`green-soft`): Observed badges, healthy task glyphs, and low-intensity live surfaces.
 - **Selection Wash** (`selection`): Selected context rows and active work without a card-like lift.
 - **Focus Green** (`focus`): The source color for visible keyboard focus rings.
@@ -221,23 +274,32 @@ The palette is a pale mineral field with spruce-green authority, warm evidence c
 - **Failure Coral** (`coral`): Failed, blocked, destructive, or problem states.
 - **Pale Failure Coral** (`coral-soft`): Diff removal and low-intensity failure fields.
 - **Inference Blue Mist** (`blue-soft`): The background for explicitly inferred evidence.
+- **Unknown Plum** (`violet`) and **Pale Unknown Plum** (`violet-soft`): Unsupported or unclassified evidence, kept apart from green, amber, coral, and blue.
 
 ### Neutral
 
-- **Mist Chrome** (`chrome-top`) and **Blue-Gray Chrome** (`chrome-bottom`): The subtle native-window surround.
-- **Work Surface** (`surface`): The dominant inset operating plane.
-- **Soft Field** (`surface-soft`): Recessed controls, log fields, chips, and low-emphasis structure.
+- **Slate Chrome** (`chrome-top`) and **Deep Slate Chrome** (`chrome-bottom`): The cooler native-window surround, visibly darker than the work surface.
+- **Work Surface** (`surface`): The warm-paper operating plane.
+- **Soft Field** (`surface-soft`): Recessed sand-toned controls, log fields, chips, and low-emphasis structure.
 - **Raised White** (`surface-raised`): Controls, composer, and bounded content that needs local separation.
-- **Deep Spruce Ink** (`ink`) and **Soft Spruce Ink** (`ink-soft`): Primary and supporting text.
-- **Operational Gray** (`muted`) and **Quiet Gray** (`quiet`): Secondary labels, timestamps, and tertiary evidence; both remain readable on their relevant surfaces.
-- **Fine Divider** (`line`) and **Strong Divider** (`line-strong`): Structural separation without card proliferation.
+- **Near-Black Ink** (`ink`) and **Soft Ink** (`ink-soft`): Primary and supporting text.
+- **Operational Gray** (`muted`) and **Quiet Gray** (`quiet`): Secondary labels, timestamps, and tertiary evidence; both stay above 4.5:1 on their relevant surfaces.
+- **Fine Divider** (`line`) and **Strong Divider** (`line-strong`): Structural separation that remains visible against both cool chrome and warm paper.
 - **Mark Deep** (`mark-deep`) and **Mark Light** (`mark-light`): The fixed two-color identity of the canonical app mark.
 
 ### Named Rules
 
-**The Scarce Green Rule.** Use green only for primary action, selected context, and evidence-backed healthy or live state; its rarity preserves operational signal.
+**The Scarce Green Rule.** Use teal only for primary action, selected context, and evidence-backed healthy or live state; its rarity preserves operational signal.
 
 **The Truth Is Redundant Rule.** Every status pairs color with text or shape, and observed, inferred, stale, unsupported, and failed states remain distinct.
+
+**The Pane Contrast Rule.** Chrome, rails, work surface, and inspector must sit on different hue-and-value steps. Do not collapse them back into one sage wash.
+
+**The Resolved Theme Rule.** The owner chooses System, Light, or Dark. System follows `prefers-color-scheme`. The root always receives `data-theme="light"` or `data-theme="dark"` so components consume tokens, never a second palette.
+
+### Dark mode
+
+Dark keeps the Owner's Workbench split: cooler near-black chrome and rails sit darker than the warmer ink-paper work surface and inspector, so the operating plane comes forward instead of collapsing into one inverted gray. Semantic hues stay recognizable. Large fields (soft greens, ambers, corals) drop saturation about 10–20%. Text tokens (`ink`, `muted`, `quiet`) and semantic labels stay at or above 4.5:1 on every pane they sit on. Primary buttons keep a deep teal fill with white labels. `--green-strong` is the readable semantic teal on dark fields; `--green-hover` is the deeper fill used only for primary hover.
 
 ## Typography
 
@@ -274,9 +336,9 @@ Depth is structural and flat at rest. The standing desktop grid uses borders, to
 
 ### Shadow Vocabulary
 
-- **Composer** (`0 6px 20px rgb(24 46 37 / 5%)`): Local separation for the active direction field.
-- **Overlay Inspector** (`0 20px 50px rgb(24 46 37 / 18%)`): Used only when the inspector leaves the desktop grid below 1180px.
-- **Toast** (`0 14px 34px rgb(14 29 23 / 24%)`): Strongest transient feedback layer.
+- **Composer** (`0 6px 20px rgb(22 32 40 / 6%)`): Local separation for the active direction field.
+- **Overlay Inspector** (`0 20px 50px rgb(22 32 40 / 18%)`): Used only when the inspector leaves the desktop grid below 1180px.
+- **Toast** (`0 14px 34px rgb(14 20 28 / 24%)`): Strongest transient feedback layer.
 
 ### Named Rules
 
@@ -296,7 +358,7 @@ Buttons are compact, quiet, and immediate.
 
 - **Shape:** Locally rounded controls (typically 7px) with a 32px minimum height; icon-only rail controls use a 38px square and 8px corners.
 - **Primary:** Owner Green with Raised White text and compact horizontal padding.
-- **Hover / Focus:** Primary actions deepen to Deep Owner Green; all buttons expose a 2px visible focus outline with a 2px offset. Disabled actions retain their shape and become visibly unavailable at 0.46 opacity.
+- **Hover / Focus:** Primary actions deepen to Deep Owner Green; all buttons expose a 2px visible focus outline with a 2px offset. Disabled actions retain their shape and become visibly unavailable at 0.58 opacity.
 - **Secondary / Outline:** Native Control over a Fine Divider border; green outlines mark high-value but non-filled action, and coral outlines identify destructive controls. Hover brightens the field; press darkens it.
 
 ### Chips
@@ -313,7 +375,7 @@ Containers feel structural rather than collectible.
 - **Corner Style:** 12px for selected or expanded task groups; square joins for the shell, rails, work surface, and standing inspector.
 - **Background:** Work Surface for the main plane; inline content blocks (execution plan, tool call, diff) use a transparent background so the border alone provides separation. Raised White for the composer and controls that need local elevation. Soft Field for recessed log/chip evidence.
 - **Shadow Strategy:** Borders and tonal layering at rest; use the documented shadows only at their named depth.
-- **Border:** Fine Divider for ordinary separation; inline content cards and conversation-stream separators use `color-mix(in srgb, var(--line) 60–65%, transparent)` to keep density light; green-mixed borders only for the current selection.
+- **Border:** Fine Divider for ordinary separation, kept solid so hairlines remain visible on both cool chrome and warm paper; green-mixed borders only for the current selection.
 - **Internal Padding:** Compact 8–16px increments observed across rows, streams, and inspectors; conversation turns use 22px vertical padding for breathing room.
 
 ### Inputs / Fields
@@ -328,7 +390,7 @@ The composer is a locally elevated work control, not a form card.
 
 The utility rail uses icon-and-shape navigation with text supplied accessibly, while the contextual three-way switch uses compact labeled tabs. Active state combines a pale selection field with Deep Owner Green. Session tabs use a 2px green underline rather than another filled control. At narrow widths, the utility rail moves intact to the bottom and the contextual rail becomes transient.
 
-The workspace back/forward nav (`.workspace-nav`) is rendered without a border or background pill; the individual icon-buttons retain their hover state, keeping the region interactive without adding chrome. The three-way view switch (`.view-switch`) uses a semi-transparent Soft Field background so it reads as structure without adding visual weight against the work surface.
+The workspace back/forward nav (`.workspace-nav`) is rendered without a border or background pill; the individual icon-buttons retain their hover state, keeping the region interactive without adding chrome. The three-way view switch (`.view-switch`) and Appearance theme switch sit on a solid Segmented Field so the active thumb can lift without the track washing into the pane.
 
 ### App Mark
 
@@ -349,7 +411,8 @@ Evidence badges, state labels, status dots, and plain-language copy work togethe
 - **Do** keep Attention, Projects, and Fleet inside the same stable shell and preserve selection and command context when switching.
 - **Do** label demo, read-only, observed, inferred, stale, unsupported, failed, and partial-evidence states honestly.
 - **Do** use the canonical app mark and code-native SVG icons; keep provider identity in text rather than brand logos.
-- **Do** keep Quiet Gray and Evidence Amber above 4.5:1 on every relevant surface, preserve visible keyboard focus, and respect reduced motion.
+- **Do** keep Quiet Gray and Evidence Amber above 4.5:1 on every relevant surface in both themes, preserve visible keyboard focus, and respect reduced motion.
+- **Do** route every flipping surface, text, and wash through the shared token set so System, Light, and Dark stay consistent.
 - **Do** preserve text or shape alongside every semantic color.
 
 ### Don't:
@@ -358,4 +421,5 @@ Evidence badges, state labels, status dots, and plain-language copy work togethe
 - **Don't** turn the shell into a retro terminal, control room, clinical triage surface, or provider-branded console.
 - **Don't** scatter shadows across ordinary rows or promote every bounded group into a card.
 - **Don't** use green as general decoration or collapse different evidence qualities into one healthy-looking state.
+- **Don't** wash chrome, rails, and the work surface back into one sage-green value range, or invert light tokens to make dark.
 - **Don't** imply that read-only or partially evidenced controls have live authority.

@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 
 use crate::components::{
-    AgentCliIcon, Composer, EmptyInspectorButton, EvidenceTag, ICON_CHECK, ICON_CLOSE, ICON_COMMAND,
-    ICON_FILE, ICON_MORE, ICON_PAUSE, ICON_SHIELD, ICON_STOP, Icon, StatusDot,
+    AgentCliIcon, Composer, EmptyInspectorButton, EvidenceTag, ICON_CHECK, ICON_CLOSE,
+    ICON_COMMAND, ICON_FILE, ICON_MORE, ICON_PAUSE, ICON_SHIELD, ICON_STOP, Icon, StatusDot,
 };
 
 #[component]

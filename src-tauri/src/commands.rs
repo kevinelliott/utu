@@ -46,6 +46,7 @@ pub struct ProjectCostSummary {
     pub known_records: u64,
     pub unknown_records: u64,
     pub complete: bool,
+    pub records: Vec<utu_core::CostRecord>,
 }
 
 /// Identifies the work-record scope of a snapshot. Provider integrations and
@@ -66,6 +67,7 @@ pub struct WorkspaceSnapshot {
     pub scope: WorkspaceScope,
     pub store: StoreStatus,
     pub projects: Vec<Project>,
+    pub ignored_projects: Vec<Project>,
     pub tasks: Vec<Task>,
     pub agents: Vec<Agent>,
     pub sessions: Vec<Session>,
@@ -102,6 +104,13 @@ pub struct SessionStream {
 pub struct CreateProjectInput {
     pub name: String,
     pub root_path: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetProjectIgnoredInput {
+    pub project_id: String,
+    pub ignored: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -260,13 +269,8 @@ pub async fn session_stream(
         // turns from the local agent transcript file on disk. Re-read the
         // projection after import so the caller always sees the latest view.
         let projection =
-            if projection.messages.is_empty() && projection.session.provider_session_id.is_some()
-            {
-                crate::transcript_import::import_transcript(
-                    &store,
-                    &projection.session,
-                    &roots,
-                );
+            if projection.messages.is_empty() && projection.session.provider_session_id.is_some() {
+                crate::transcript_import::import_transcript(&store, &projection.session, &roots);
                 store
                     .read_session_projection(&session_id, message_query, event_query, 500)
                     .map_err(store_error)?
@@ -306,6 +310,7 @@ pub async fn create_project(
             name,
             root_path,
             state: ProjectState::Active,
+            ignored: false,
             created_at_unix_ms: unix_ms(),
         };
         store.upsert_project(&project).map_err(store_error)?;
@@ -333,6 +338,19 @@ pub async fn save_project(
             .transpose()?;
         store.upsert_project(&project).map_err(store_error)?;
         Ok(project)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn set_project_ignored(
+    state: State<'_, AppState>,
+    input: SetProjectIgnoredInput,
+) -> Result<Project, String> {
+    run_mutating(&state, move |store| {
+        store
+            .set_project_ignored(&input.project_id, input.ignored)
+            .map_err(store_error)
     })
     .await
 }
@@ -709,6 +727,7 @@ fn snapshot(
             foreign_keys_enabled: projection.health.foreign_keys_enabled,
         },
         projects: projection.projects,
+        ignored_projects: projection.ignored_projects,
         tasks: projection.tasks,
         agents: projection.agents,
         sessions: projection.sessions,
@@ -728,6 +747,7 @@ fn snapshot(
                 known_records: cost.summary.known_records,
                 unknown_records: cost.summary.unknown_records,
                 complete: cost.summary.is_complete(),
+                records: cost.records,
             })
             .collect(),
         provider_delivery,
@@ -1145,6 +1165,7 @@ mod tests {
                 name: "Project".into(),
                 root_path: None,
                 state: ProjectState::Active,
+                ignored: false,
                 created_at_unix_ms: 1,
             })
             .expect("project");
@@ -1152,6 +1173,46 @@ mod tests {
             .expect("snapshot");
         assert_eq!(snapshot.costs[0].amount.micros, None);
         assert_eq!(snapshot.costs[0].amount.confidence, CostConfidence::Unknown);
+        assert_eq!(snapshot.costs[0].known_records, 0);
+        assert_eq!(snapshot.costs[0].unknown_records, 0);
+        assert!(snapshot.costs[0].records.is_empty());
+        assert!(!snapshot.costs[0].complete);
+    }
+
+    #[test]
+    fn ignored_project_is_omitted_from_the_workbench_snapshot() {
+        let store = seeded_store();
+        store
+            .upsert_project(&Project {
+                id: "kept".into(),
+                name: "Kept".into(),
+                root_path: None,
+                state: ProjectState::Active,
+                ignored: false,
+                created_at_unix_ms: 1,
+            })
+            .expect("kept project");
+        store
+            .upsert_project(&Project {
+                id: "hidden".into(),
+                name: "Hidden".into(),
+                root_path: None,
+                state: ProjectState::Active,
+                ignored: false,
+                created_at_unix_ms: 2,
+            })
+            .expect("hidden project");
+        store
+            .set_project_ignored("hidden", true)
+            .expect("ignore project");
+
+        let snapshot = snapshot(&store, &crate::codex_runtime::CodexRuntime::default(), None)
+            .expect("snapshot");
+        assert_eq!(snapshot.projects.len(), 1);
+        assert_eq!(snapshot.projects[0].id, "kept");
+        assert_eq!(snapshot.ignored_projects.len(), 1);
+        assert_eq!(snapshot.ignored_projects[0].id, "hidden");
+        assert!(snapshot.ignored_projects[0].ignored);
     }
 
     #[test]
@@ -1164,6 +1225,7 @@ mod tests {
                     name: id.into(),
                     root_path: None,
                     state: ProjectState::Active,
+                    ignored: false,
                     created_at_unix_ms: 1,
                 })
                 .expect("project");
@@ -1194,6 +1256,7 @@ mod tests {
                 name: "Project".into(),
                 root_path: None,
                 state: ProjectState::Active,
+                ignored: false,
                 created_at_unix_ms: 1,
             })
             .expect("project");
@@ -1400,6 +1463,7 @@ mod tests {
                     name: id.into(),
                     root_path: None,
                     state: ProjectState::Active,
+                    ignored: false,
                     created_at_unix_ms: 1,
                 })
                 .expect("project");

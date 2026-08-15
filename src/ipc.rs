@@ -31,6 +31,8 @@ pub struct WorkspaceSnapshot {
     pub generated_at_unix_ms: u64,
     pub store: StoreStatus,
     pub projects: Vec<ProjectRecord>,
+    #[serde(default)]
+    pub ignored_projects: Vec<ProjectRecord>,
     pub tasks: Vec<TaskRecord>,
     pub agents: Vec<AgentRecord>,
     pub sessions: Vec<SessionRecord>,
@@ -46,6 +48,21 @@ impl WorkspaceSnapshot {
             .iter()
             .find(|eligibility| eligibility.session_id == session_id)
             .is_some_and(|eligibility| eligibility.eligible)
+    }
+
+    pub fn find_project(&self, id: &str) -> Option<&ProjectRecord> {
+        self.projects
+            .iter()
+            .find(|project| project.id == id)
+            .or_else(|| {
+                self.ignored_projects
+                    .iter()
+                    .find(|project| project.id == id)
+            })
+    }
+
+    pub fn project_is_ignored(&self, id: &str) -> bool {
+        self.ignored_projects.iter().any(|project| project.id == id)
     }
 }
 
@@ -64,6 +81,8 @@ pub struct ProjectRecord {
     pub name: String,
     pub root_path: Option<String>,
     pub state: String,
+    #[serde(default)]
+    pub ignored: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -146,7 +165,13 @@ pub struct ProviderDeliveryEligibility {
 pub struct ProjectCostSummary {
     pub project_id: String,
     pub amount: CostAmount,
+    #[serde(default)]
+    pub known_records: u64,
+    #[serde(default)]
+    pub unknown_records: u64,
     pub complete: bool,
+    #[serde(default)]
+    pub records: Vec<CostRecord>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -154,6 +179,21 @@ pub struct CostAmount {
     pub currency: String,
     pub micros: Option<u64>,
     pub confidence: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct CostRecord {
+    pub id: String,
+    pub project_id: String,
+    pub task_id: Option<String>,
+    pub session_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub amount: CostAmount,
+    pub occurred_at_unix_ms: u64,
+    pub ingested_at_unix_ms: u64,
+    pub evidence: String,
+    pub source: String,
+    pub note: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -462,6 +502,32 @@ pub async fn create_project(name: &str, root_path: &str) -> Result<ProjectRecord
     .await
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SetProjectIgnoredArgs<'a> {
+    input: SetProjectIgnoredInput<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SetProjectIgnoredInput<'a> {
+    project_id: &'a str,
+    ignored: bool,
+}
+
+pub async fn set_project_ignored(project_id: &str, ignored: bool) -> Result<ProjectRecord, String> {
+    invoke(
+        "set_project_ignored",
+        &SetProjectIgnoredArgs {
+            input: SetProjectIgnoredInput {
+                project_id,
+                ignored,
+            },
+        },
+    )
+    .await
+}
+
 pub async fn create_task(
     project_id: &str,
     title: &str,
@@ -747,7 +813,8 @@ mod tests {
                 "amount": { "currency": "USD", "micros": null, "confidence": "unknown" },
                 "knownRecords": 0,
                 "unknownRecords": 0,
-                "complete": false
+                "complete": false,
+                "records": []
             }],
             "providerDelivery": []
         });
@@ -757,6 +824,10 @@ mod tests {
         assert_eq!(snapshot.projects[0].root_path.as_deref(), Some("/tmp/utu"));
         assert!(snapshot.agents[0].capabilities.auth_probe);
         assert!(snapshot.agents[0].capabilities.agent_messages);
+        assert_eq!(snapshot.costs[0].known_records, 0);
+        assert_eq!(snapshot.costs[0].unknown_records, 0);
+        assert!(snapshot.costs[0].records.is_empty());
+        assert!(!snapshot.costs[0].complete);
     }
 }
 

@@ -30,8 +30,7 @@ pub const ICON_SHIELD: &str = "M12 3 20 6v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z";
 pub const ICON_COMMAND: &str =
     "M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z";
 /// Radial/orbit icon for the Overview view.
-pub const ICON_ORBIT: &str =
-    "M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M5.2 18.8l2.1-2.1M16.7 7.3l2.1-2.1M12 3v2M12 19v2M3 12h2M19 12h2";
+pub const ICON_ORBIT: &str = "M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M5.2 18.8l2.1-2.1M16.7 7.3l2.1-2.1M12 3v2M12 19v2M3 12h2M19 12h2";
 
 #[component]
 pub fn AppMarkGlyph() -> impl IntoView {
@@ -115,14 +114,16 @@ pub fn Composer(
 }
 
 #[component]
-pub fn EvidenceTag(kind: &'static str) -> impl IntoView {
-    let tone = match kind {
-        "Observed" => "observed",
-        "Inferred" => "inferred",
-        "Stale" => "stale",
-        _ => "unknown",
+pub fn EvidenceTag(#[prop(into)] kind: String) -> impl IntoView {
+    let normalized = kind.to_ascii_lowercase();
+    let (tone, label) = match normalized.as_str() {
+        "observed" => ("observed", "Observed"),
+        "inferred" => ("inferred", "Inferred"),
+        "stale" => ("stale", "Stale"),
+        "unsupported" => ("unknown", "Unsupported"),
+        _ => ("unknown", "Unknown"),
     };
-    view! { <span class=format!("evidence-tag evidence-{tone}")>{kind}</span> }
+    view! { <span class=format!("evidence-tag evidence-{tone}")>{label}</span> }
 }
 
 /// Branded icon for a known agent CLI. Hover shows the official name.
@@ -226,7 +227,7 @@ pub fn connector_bg_color(connector_id: &str) -> &'static str {
         "opencode" => "#7c5cbf",
         "grok" => "#5c6370",
         "antigravity" => "#3a7d5c",
-        _ => "#65716c",
+        _ => "#3f4a52",
     }
 }
 
@@ -275,7 +276,8 @@ pub fn VirtualList<T, F, V>(
     /// Full item list, re-evaluated on every scroll.
     items: impl Fn() -> Vec<T> + Send + Sync + 'static,
     /// Height of every row in pixels (uniform).
-    #[prop(default = 52.0_f64)] row_height: f64,
+    #[prop(default = 52.0_f64)]
+    row_height: f64,
     /// Renders one item into a view.
     render_item: F,
 ) -> impl IntoView

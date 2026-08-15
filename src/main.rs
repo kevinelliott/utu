@@ -5,10 +5,12 @@ mod components;
 mod demo;
 mod ipc;
 mod markdown;
+mod theme;
 mod views;
 mod workspace_data;
 
 fn main() {
+    crate::theme::hydrate();
     if crate::ipc::is_about_window() {
         leptos::mount::mount_to_body(about::AboutWindow);
     } else {

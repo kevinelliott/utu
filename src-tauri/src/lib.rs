@@ -81,6 +81,7 @@ pub fn run() {
             commands::session_stream,
             commands::create_project,
             commands::save_project,
+            commands::set_project_ignored,
             commands::delete_project,
             commands::create_task,
             commands::save_task,

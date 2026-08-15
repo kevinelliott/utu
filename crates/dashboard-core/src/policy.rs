@@ -148,6 +148,15 @@ mod tests {
             crate::CostAmount::usd_estimate(1_420_000).display(),
             "~$1.42"
         );
+        assert_eq!(crate::CostAmount::usd_exact(1_420_000).display(), "$1.42");
+        assert_eq!(
+            crate::CostAmount::unknown("USD").unwrap().display(),
+            "Unknown"
+        );
+        assert_ne!(
+            crate::CostAmount::usd_estimate(1_420_000).display(),
+            crate::CostAmount::usd_exact(1_420_000).display()
+        );
     }
 
     #[test]
